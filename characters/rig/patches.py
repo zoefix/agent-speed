@@ -47,6 +47,9 @@ GAIN_RANGE, MIN_SPREAD = (0.8, 1.25), 0.02
 # hard switch from the edit to the base along them shows those steps wherever the edit drew a strand elsewhere.
 COVER_RAMP = (0.15, 0.6)
 COVER_SOFTEN, COVER_LIFT = 2.5, 1.5
+# Under those layers the base face holds the replaced parts (eyes, lashes) as the rig draws them, except where the edit
+# changed the art (the change blurred by GONE_BLUR px, ramped from GONE_RAMP[0] to GONE_RAMP[1]): there the bare face.
+GONE_BLUR, GONE_RAMP = 1.5, (0.15, 0.5)
 # A pixel changed when the edit and the art, both blurred by CHANGE_SIGMA px, differ by CHANGE_LEVEL in a channel.
 # An edit must change MIN_CHANGED face widths squared of its region (a pucker of a small mouth is a few dozen px),
 # and MIN_CHANGED_OVER_NOISE times the share it changed around the head (a redrawn but unchanged face).
@@ -124,8 +127,10 @@ def eye_area(layers, shape):
 class Base:
     """The base rig's face and art for one pose; every patch of the pose is cut from it."""
 
-    def __init__(self, layers, reference, face_box):
+    def __init__(self, layers, reference, face_box, keep=None):
         self.layers, self.reference = layers, reference
+        # What the art shows over the face that no patch may replace (a flute's lip plate: layers.objects_over_face).
+        self.keep = keep if keep is not None else np.zeros(reference.shape[:2], bool)
         self.shape = reference.shape[:2]
         self.box = face_box
         fx0, fy0, fx1, fy1 = face_box
@@ -162,12 +167,15 @@ class Base:
             mask = eye_area(self.layers, self.shape) & self.skin
         if replaced:
             mask |= grow(_union(replaced, 0.05, self.shape) & self.head_mask(), 1)
+        if self.keep.any():
+            mask &= ~grow(self.keep, 1)
         kept = [layer for layer in self.layers[self.face_index + 1:] if layer.tag not in tags]
         out = {
             "mask": mask,
             "alpha": feather(mask),
             "replaces": [layer.name for layer in replaced],
             "under": L.composite([self.layers[self.face_index]] + replaced),
+            "skin": L.composite([self.layers[self.face_index]]),
             "cover": L.coverage(kept) if kept else np.zeros(self.shape, np.float32),
         }
         self._regions[name] = out
@@ -261,8 +269,12 @@ def cut(base, path, region):
                        f"{noise:.2%} around the head)")
     cover = np.maximum(r["cover"], COVER_LIFT * ndimage.gaussian_filter(r["cover"], COVER_SOFTEN))
     w = smoothstep(COVER_RAMP[0], COVER_RAMP[1], cover)[..., None]
+    # Where the edit changed what the base shows, the replaced parts' old pixels give way to the bare face under the
+    # bangs too: a closed eye leaves no tip of the open eye's lashes along the bangs.
+    gone = smoothstep(GONE_RAMP[0], GONE_RAMP[1], ndimage.gaussian_filter(diff.astype(np.float32), GONE_BLUR))[..., None]
+    under = r["under"] * (1 - gone) + r["skin"] * gone
     rgba = np.zeros(base.shape + (4,), np.float32)
-    rgba[..., :3] = edit * (1 - w) + r["under"] * w
+    rgba[..., :3] = edit * (1 - w) + under * w
     rgba[..., 3] = r["alpha"]
     return rgba, r["replaces"], report
 

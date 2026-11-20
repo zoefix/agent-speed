@@ -281,6 +281,56 @@ def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, 
     return int(piece.sum())
 
 
+RIM_TAGS = ("handwear", "hand", "objects", "front hair", "tail", "wings")
+
+
+def unmix_rims(layers, reference, owner, moving=RIM_TAGS, width=2, min_alpha=0.08, flat=0.01):
+    """Gives each moving part the soft rim of its outline that reproject left on the layers under it (`owner`): the
+    art's anti-aliased edge pixels go to the layer below once a part covers them by less than half, so a lock of hair or
+    an arm moving away leaves a dotted copy of its outline. Within `width` px of the part, a pixel a lower layer owns
+    splits into the part's nearest color at the share the art implies, over that layer's own color around it (a blur
+    of its pixels farther out); `flat` is the least squared color distance between them that tells a rim apart. The
+    rest pose stays the same. Returns the pixels split."""
+    h, w = owner.shape
+    total = 0
+    for m, part in enumerate(layers):
+        if part.tag not in moving:
+            continue
+        solid = owner == m
+        if not solid.any():
+            continue
+        ring = ndimage.binary_dilation(solid, iterations=width) & ~solid & (owner >= 0) & (owner < m)
+        if not ring.any():
+            continue
+        ys, xs = np.nonzero(ring)
+        pad = 8 * width
+        box = (slice(max(ys.min() - pad, 0), min(ys.max() + pad + 1, h)),
+               slice(max(xs.min() - pad, 0), min(xs.max() + pad + 1, w)))
+        near = ndimage.binary_dilation(solid[box], iterations=width + 1)
+        _, (iy, ix) = ndimage.distance_transform_edt(~solid[box], return_indices=True)
+        edge = part.rgba[box][..., :3][iy, ix]
+        ref = reference[box]
+        for j in np.unique(owner[box][ring[box]]):
+            lower = layers[j]
+            mine = ring[box] & (owner[box] == j)
+            known = (owner[box] == j) & ~near
+            if known.sum() < 10:
+                continue
+            own = _smooth_fill(lower.rgba[box][..., :3], known)
+            d = edge - own
+            dd = (d * d).sum(axis=2)
+            share = np.clip(((ref - own) * d).sum(axis=2) / np.maximum(dd, 1e-6), 0, 1)
+            take = mine & (dd > flat) & (share > min_alpha)
+            if not take.any():
+                continue
+            view, under = part.rgba[box], lower.rgba[box]
+            view[..., :3] = np.where(take[..., None], edge, view[..., :3])
+            view[..., 3] = np.where(take, share, view[..., 3])
+            under[..., :3] = np.where(take[..., None], own, under[..., :3])
+            total += int(take.sum())
+    return total
+
+
 def _own_paint(layer, reference, tol=0.06):
     """Where a layer's own paint matches the art (mean channel difference over a 5 px box under `tol`)."""
     return ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - reference).mean(axis=2), 5) < tol
@@ -342,6 +392,82 @@ def objects_over_arms(layers, reference, margin=0.05, min_px=300):
                 arm.rgba[..., 3] = np.where(front, 0.0, arm.alpha)
                 taken.append((arm.tag, behind))
     return taken
+
+
+FACE_TAGS = ("face", "eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth")
+
+
+def _over_face(layer, heads, reference, min_px, off, margin):
+    """Pieces (at least `min_px`) where `layer` and the face's layers `heads` overlap and the art shows `layer`: the
+    face's own paint there is off the art (median of the mean channel difference over a 5 px box above `off`:
+    something is drawn over it) and the layer's is no further off by `margin`. Returns (overlap, pieces)."""
+    head = coverage(heads)
+    overlap = (layer.alpha > 0.5) & (head > 0.5)
+    front = np.zeros_like(overlap)
+    if overlap.sum() < min_px:
+        return overlap, front
+    drawn = composite(heads, background=0.0) / np.maximum(head, 1e-6)[..., None]
+    d_head = ndimage.uniform_filter(np.abs(drawn - reference).mean(axis=2), 5)
+    d_layer = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - reference).mean(axis=2), 5)
+    labels, count = ndimage.label(overlap)
+    for k in range(1, count + 1):
+        piece = labels == k
+        if piece.sum() < min_px:
+            continue
+        face_off, layer_off = float(np.median(d_head[piece])), float(np.median(d_layer[piece]))
+        if face_off > off and layer_off < face_off + margin:
+            front |= piece
+    return overlap, front
+
+
+def arms_over_face(layers, reference, min_px=30, off=0.06, margin=0.05, bridge=8):
+    """Draws an arm the art shows over the face (a finger on the lips, _over_face) above the face: the split draws the
+    face over the arms, so reproject painted the fingertip onto the face, where it stayed when the arm moved. Such an
+    arm goes right above the face's features (below the bangs) and keeps none of the face's other pixels; reproject
+    then paints the art there on the arm and the face's pixels under it are hidden, as far as the face closes around
+    them (a finger crossing the jaw takes along what lies below it). Returns the layers and the pixels the arms
+    took."""
+    taken = 0
+    for arm in [layer for layer in layers if layer.tag in ARM_TAGS]:
+        heads = [layer for layer in layers[layers.index(arm) + 1:] if layer.tag in FACE_TAGS]
+        if not heads:
+            continue
+        overlap, front = _over_face(arm, heads, reference, min_px, off, margin)
+        if not front.any():
+            continue
+        arm.rgba[..., 3] = np.where(overlap & ~front, 0.0, arm.alpha)
+        # What the face's layers drew under the arm past the face's own outline (the finger below the jaw) goes: the
+        # face keeps it only where its other pixels (slivers of 2 px left out) close around it within `bridge` px.
+        for h in heads:
+            solid = h.alpha > 0.5
+            if not (solid & front).any():
+                continue
+            body = ndimage.binary_opening(solid & ~front, iterations=2)
+            keep = ndimage.binary_fill_holes(ndimage.binary_closing(body, iterations=bridge))
+            h.rgba[..., 3] = np.where(front & solid & ~keep, 0.0, h.alpha)
+        layers.remove(arm)
+        top = max(i for i, layer in enumerate(layers) if layer.tag in FACE_TAGS)
+        layers.insert(top + 1, arm)
+        taken += int(front.sum())
+    return layers, taken
+
+
+def objects_over_face(layers, min_px=30):
+    """Where a held object overlaps the face (a flute's lip plate at the lips; See-Through often paints it into the
+    face layer as well): an object is never behind the face, so the face keeps what the art shows there and face
+    patches leave it as drawn (an edit that left the plate out would make it pop in and out). Pieces of at least
+    `min_px`. Returns the mask."""
+    out = np.zeros(layers[0].alpha.shape, bool)
+    for obj in [layer for layer in layers if layer.tag == "objects"]:
+        heads = [layer for layer in layers if layer.tag in FACE_TAGS]
+        if not heads:
+            continue
+        overlap = (obj.alpha > 0.5) & (coverage(heads) > 0.5)
+        labels, count = ndimage.label(overlap)
+        if count:
+            sizes = np.asarray(ndimage.sum(overlap, labels, range(1, count + 1)))
+            out |= np.isin(labels, 1 + np.flatnonzero(sizes >= min_px))
+    return out
 
 
 def arms_behind_objects(layers, taken, min_px=300, apart=0.3):
@@ -469,6 +595,24 @@ def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
         view[..., :3] = np.where(covered[box][..., None], colors, view[..., :3])
 
 
+def wings_alone(layers, reach=6):
+    """Leaves the wings the only drawing of the wings: See-Through also paints their silhouette into a layer under them
+    (the back hair holds a dark copy of both wings), which shows once they flap. A layer's pixels under the wings
+    more than `reach` px from where that layer shows beside them go. Returns the pixels cleared."""
+    cleared = 0
+    for wing in [layer for layer in layers if layer.tag == "wings"]:
+        over = wing.alpha > 0.5
+        for layer in layers[:layers.index(wing)]:
+            solid = layer.alpha > 0.5
+            hidden = solid & over
+            if not hidden.any():
+                continue
+            far = hidden & (ndimage.distance_transform_edt(~(solid & ~over)) > reach)
+            layer.rgba[..., 3] = np.where(far, 0.0, layer.alpha)
+            cleared += int(far.sum())
+    return cleared
+
+
 def tail_alone(layers, reference, share=0.5, min_px=2000):
     """Leaves the tail the only drawing of the tail. The split also paints the tail into the layers around it: a
     tail hanging in front of the skirt goes behind the skirt with a copy of it in the skirt, and a tail curling over
@@ -588,6 +732,72 @@ def split_pairs(layers, center_x, min_share=0.03):
             rgba[..., 3] = np.where(mask, rgba[..., 3], 0)
             out.append(Layer(f"{layer.name}.{side}", layer.tag, rgba, side))
     return out
+
+
+EYE_TAGS = ("eyewhite", "irides", "eyelash")
+
+
+def lashes_off_hair(layers, reference, inpaint=None, reach=4, dark=0.4, apart=0.2, local=11, island=80, faint=0.05):
+    """Paints out of the front hair what it drew of the eyes: See-Through puts a lash seen through the bangs into the
+    hair, and a face patch lies under the hair, so a closed or lowered eye left that piece of lash on the hair. A
+    hair pixel (opaque over `faint`) over an eye's layers (grown by `reach` px) that is dark (luminance under `dark`) and darker than the
+    hair around it (its `local` px median) by `apart`, grown by 1 px, is repainted from the art around it by
+    `inpaint(image, mask)` with the eyes masked as well (LaMa: the bangs go on over the skin), or a blur of the hair's
+    other colors without it (the lash tip under the bangs gives way to the bangs at rest too). A piece of the hair
+    under `island` px lying over an eye goes to the nearest lash layer. Returns the pixels repainted or moved."""
+    hair = [layer for layer in layers if layer.tag == "front hair"]
+    eyes = [layer for layer in layers if layer.tag in EYE_TAGS]
+    if not hair or not eyes:
+        return 0
+    eye = ndimage.binary_dilation(coverage(eyes) > 0.3, iterations=reach)
+    lashes = [layer for layer in eyes if layer.tag == "eyelash"] or eyes
+    repainted = 0
+    for h in hair:
+        solid = h.alpha > faint
+        # A speck of the hair alone over an eye (a lash tip the split cut loose into the hair) goes to the nearest
+        # lash layer as it is: at rest it looks the same, and a face patch replaces it with the lashes.
+        labels, count = ndimage.label(solid)
+        if count:
+            sizes = np.asarray(ndimage.sum(solid, labels, range(1, count + 1)))
+            inside = np.asarray(ndimage.mean(eye, labels, range(1, count + 1)))
+            specks = np.isin(labels, 1 + np.flatnonzero((sizes < island) & (inside > 0.9)))
+            if specks.any():
+                dist = np.stack([ndimage.distance_transform_edt(~(lash.alpha > 0.3)) for lash in lashes])
+                nearest = np.argmin(dist, axis=0)
+                a = h.alpha
+                for k, lash in enumerate(lashes):
+                    mine = specks & (nearest == k)
+                    under = lash.alpha
+                    total = a + under * (1 - a)
+                    mixed = (h.rgba[..., :3] * a[..., None] + lash.rgba[..., :3] * (under * (1 - a))[..., None])
+                    lash.rgba[..., :3] = np.where(mine[..., None], mixed / np.maximum(total, 1e-6)[..., None],
+                                                  lash.rgba[..., :3])
+                    lash.rgba[..., 3] = np.where(mine, total, under)
+                h.rgba[..., 3] = np.where(specks, 0.0, a)
+                solid &= ~specks
+                repainted += int(specks.sum())
+        near = eye & solid
+        if not near.any():
+            continue
+        luma = h.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
+        ys, xs = np.nonzero(near)
+        pad = 2 * local
+        box = (slice(max(ys.min() - pad, 0), ys.max() + pad + 1), slice(max(xs.min() - pad, 0), xs.max() + pad + 1))
+        around = np.where((h.alpha > 0.5)[box], luma[box], np.nan)
+        median = ndimage.generic_filter(around, np.nanmedian, size=local, mode="nearest")
+        take = near[box] & (luma[box] < dark) & (luma[box] < median - apart)
+        if not take.any():
+            continue
+        take = ndimage.binary_dilation(take, iterations=1) & solid[box]
+        view = h.rgba[box]
+        if inpaint is not None:
+            # The eyes are masked too, so the fill continues the bangs and the skin around, not the lash itself.
+            colors = inpaint(reference[box], take | ndimage.binary_dilation(coverage(eyes)[box] > 0.05, iterations=2))
+        else:
+            colors = _smooth_fill(view[..., :3].copy(), solid[box] & ~take)
+        view[..., :3] = np.where(take[..., None], colors, view[..., :3])
+        repainted += int(take.sum())
+    return repainted
 
 
 def _segment_distance(xx, yy, a, b):
@@ -751,15 +961,16 @@ def back_tail_root(layers, root, reach, band=25, rim=3, pad=4):
     return filled
 
 
-def grow_underlays(layers, radius=10, seam=3):
-    """Extends each layer under the opaque layers above it, so moving parts never open gaps. Under a tail or wings
-    only by `seam` px, enough to back their soft edge: they swing far off, and more would show as fragments of the
-    layer's edge."""
+def grow_underlays(layers, radius=10, seam=3, swinging=RIM_TAGS):
+    """Extends each layer under the opaque layers above it, so the seams between still parts never open. Under parts
+    that swing away (arms, hands, objects, the bangs and locks, tails, wings) only by `seam` px, enough to back their
+    soft edge: more would show as a tab of the layer past its outline once the part moved (the face under a finger
+    below the jaw); a real gap under them is fill_enclosed_under's."""
     for i, layer in enumerate(layers):
         if layer.tag in NO_GROWTH or i == len(layers) - 1:
             continue
         above = coverage(layers[i + 1:]) > 0.98
-        steady = coverage([upper for upper in layers[i + 1:] if upper.tag not in ("tail", "wings")]) > 0.98
+        steady = coverage([upper for upper in layers[i + 1:] if upper.tag not in swinging]) > 0.98
         solid = layer.alpha > 0.5
         if not solid.any():
             continue
@@ -773,35 +984,67 @@ def grow_underlays(layers, radius=10, seam=3):
 
 
 MOVING_TAGS = ("handwear", "hand", "objects", "front hair", "tail")
+# Layers drawn behind the body: a gap in the body over them is still a gap in the body.
+BEHIND_TAGS = ("back hair", "tail", "wings")
 
 
-def fill_enclosed_under(layers, moving=MOVING_TAGS, min_px=30, pad=70):
+def _between(mask, reach):
+    """Pixels with `mask` within `reach` px on both sides along a row or along a column."""
+    def sides(m):
+        idx = np.arange(m.shape[1], dtype=np.float32)[None, :]
+        left = np.maximum.accumulate(np.where(m, idx, -np.inf), axis=1)
+        right = np.flip(np.minimum.accumulate(np.flip(np.where(m, idx, np.inf), axis=1), axis=1), axis=1)
+        return (idx - left <= reach) & (right - idx <= reach)
+    return sides(mask) | sides(mask.T).T
+
+
+def fill_enclosed_under(layers, moving=MOVING_TAGS, min_px=30, pad=70, body_share=0.6, reach=60):
     """Fills the gaps the layers under a moving part leave inside themselves where that part covers them (a sleeve
-    hanging over a torso the split left open): each gap of at least `min_px` the layers drawn below the part enclose
-    joins the one of them that holds most of its rim, in a blur of that layer's colors (_smooth_fill), so the part
-    moving away uncovers that layer instead of the background. Returns the pixels filled."""
+    hanging over a torso the split left open, a braid over a blouse open down to the hair behind): each gap of at
+    least `min_px` that the layers drawn below the part enclose, or that the body's layers (all but BEHIND_TAGS) hold
+    `body_share` of the rim of (its pixels with the body within `reach` px to both sides, so nothing grows past the
+    body's outline), joins the layer that holds most of its rim (a body layer for the latter), in a blur of that
+    layer's colors (_smooth_fill), so the part moving away uncovers that layer instead of the background or the back
+    hair. Returns the pixels filled."""
     filled = 0
     for m, part in enumerate(layers):
         if part.tag not in moving or m == 0:
             continue
         lower = coverage(layers[:m]) > 0.5
-        gaps = ndimage.binary_fill_holes(lower) & ~lower & (part.alpha > 0.5)
-        gaps = ndimage.binary_opening(gaps, iterations=1)
+        body_ids = [i for i in range(m) if layers[i].tag not in BEHIND_TAGS]
+        if not body_ids:
+            continue
+        body = coverage([layers[i] for i in body_ids]) > 0.5
+        enclosed = ndimage.binary_fill_holes(lower) & ~lower
+        gaps = ndimage.binary_opening((part.alpha > 0.5) & ~body, iterations=1)
         labels, count = ndimage.label(gaps)
         if not count:
             continue
         owner = owner_map(layers[:m])
+        body_owner = owner_map([layers[i] for i in body_ids])
         for k, sl in enumerate(ndimage.find_objects(labels)):
             y0, y1 = max(0, sl[0].start - pad), sl[0].stop + pad
             x0, x1 = max(0, sl[1].start - pad), sl[1].stop + pad
             gap = labels[y0:y1, x0:x1] == k + 1
             if gap.sum() < min_px:
                 continue
-            rim = owner[y0:y1, x0:x1][ndimage.binary_dilation(gap, iterations=2) & ~gap]
-            rim = rim[rim >= 0]
-            if not len(rim):
+            ring = ndimage.binary_dilation(gap, iterations=2) & ~gap
+            inside = enclosed[y0:y1, x0:x1][gap].all()
+            rim_body = body_owner[y0:y1, x0:x1][ring]
+            if not inside and (rim_body >= 0).mean() < body_share:
                 continue
-            layer = layers[int(np.bincount(rim).argmax())]
+            if inside:
+                rim = owner[y0:y1, x0:x1][ring]
+                rim = rim[rim >= 0]
+                if not len(rim):
+                    continue
+                layer = layers[int(np.bincount(rim).argmax())]
+            else:
+                gap &= _between(body[y0:y1, x0:x1], reach)
+                if gap.sum() < min_px:
+                    continue
+                rim = rim_body[rim_body >= 0]
+                layer = layers[body_ids[int(np.bincount(rim).argmax())]]
             view = layer.rgba[y0:y1, x0:x1]
             colors = _smooth_fill(view[..., :3].copy(), view[..., 3] > 0.5)
             view[..., :3] = np.where(gap[..., None], colors, view[..., :3])

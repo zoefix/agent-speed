@@ -120,7 +120,8 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
   expression), `mouth` or `eyes`. Its part `face@<id>` is fully in by `Var` 0.5 while the parts it replaces fade out
   to 1. Under the layers kept above it (the bangs) a patch shows the base face, by their opacity softened by a 2.5 px
   blur raised 1.5 times (from 0.15 to 0.6), so the bangs' stair-stepped edges never show as a hard switch from the
-  edit. Patches lie right above the face and below the bangs, by region: `face` lowest, then `mouth`, then `eyes`,
+  edit; that base face holds the parts the patch replaces as drawn, except where the edit changed the art (its change
+  blurred by 1.5 px, from 0.15 to 0.5), where it is the bare face layer (a closed eye leaves no lash tip by the bangs). Patches lie right above the face and below the bangs, by region: `face` lowest, then `mouth`, then `eyes`,
   so a blink or a gaze shows over an expression and a talking mouth over it too. Ids name what they show:
   `expr-<name>` (region `face`: `smile`, `laugh`, `wink`, `surprised`, `pout`, `shy`, `thinking`, `sleepy`, `yawn`,
   `focused`, `smug`, `worried`, `excited`), `mouth-<a|i|u|o|closed>` (region `mouth`) and
@@ -277,16 +278,56 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   leaves those pixels to the object before the art is painted on the layers; once the arms are split, each piece goes
   back to the nearest arm (hidden) and the object is drawn right above that arm, unless that arm also lies over the
   object on 300 px or more elsewhere. A book held against a sleeve then never moves with the sleeve.
+- **Wings alone**: See-Through also paints the wings' silhouette into a layer under them (the back hair holding a dark
+  copy of both wings), which showed once they flapped. A layer's pixels under the wings more than 6 px from where
+  that layer shows beside them go.
+- **Arms over the face**: the split draws the face over the arms, so a finger on the lips was painted onto the face
+  and stayed there when the arm moved. A piece of 30 px or more where an arm and the face's layers overlap is the
+  arm's when the face's own paint there is off the art (median mean channel difference over 0.06, 5 px box) and the
+  arm's is no further off by 0.05; that arm is drawn right above the face's features, below the bangs, and keeps none
+  of the face's other pixels.
+- **Objects over the face**: a held object is never behind the face, so where one overlaps the face's layers (pieces
+  of 30 px or more: a flute's lip plate at the lips, which See-Through often paints into the face too) the face keeps
+  what the art shows and no face patch replaces it (each region leaves it out, grown by 1 px), so an edit that left
+  the plate out never makes it pop in and out.
 - **Hidden paint**: what See-Through guessed of a layer under the layers drawn over it, where it stands apart from a
   blur of the colors that layer shows (mean channel difference over 0.3: a dark slab on a white blouse, a hand drawn
   into the book under it), takes that blur, so a part moving away uncovers the layer's own colors.
+- **Rims of moving parts**: reproject gives a pixel to the topmost layer covering it by over half, so the soft edge
+  of a sleeve, hand, object, the bangs or locks, the tail or wings stays on the layer under it and a part moving away
+  leaves a dotted copy of its outline. Within 2 px of such a part, a pixel a lower layer owns splits into the part's
+  nearest color, at the share the art implies, over that layer's own color (a blur of its pixels farther out).
+- **Lashes in the bangs**: See-Through draws a lash seen through the bangs into the front hair, and face patches lie
+  under the hair, so a closed eye left it there. A front hair pixel within 4 px of an eye's layers that is dark
+  (luminance under 0.4) and 0.2 darker than the hair around it (11 px median), grown by 1 px, is repainted from the
+  art around it by LaMa (with `--lama`; else a blur of the hair's other colors), at rest too: the bangs cover that tip
+  of the lash.
+- **Paper between curls**: the matte calls a whole mass of long hair figure, white pockets between its curls too. A
+  near-white pocket below the chin, off the image edge, of 20 px or more, that only the hair layers cover (95 % of it,
+  no other layer over half), is as white as paper (mean darkest channel over 0.985) and is framed by the hair's ink
+  or color (mean darkest channel on a 2 px ring under 0.75; white hair around a highlight is lighter) is paper.
+- **Underlays**: each layer grows up to 10 px under the opaque layers above it (the nearest of its pixels' colors), so
+  the seams between still parts never open; under parts that swing away (sleeves, hands, objects, the bangs and
+  locks, tails, wings) only 3 px, enough to back their soft edge, so no tab of a layer past its outline shows once
+  they move.
 - **Gaps under moving parts**: a gap of 30 px or more that the layers drawn below a sleeve, hand, object, the bangs or
-  the tail enclose where that part covers them joins the layer holding most of its rim, in a blur of its colors.
+  the tail enclose where that part covers them joins the layer holding most of its rim, in a blur of its colors. So
+  does a gap in the body's layers (all but the back hair, tail and wings) over what lies behind them, when the body
+  holds 60 % of its rim, as far as the body lies within 60 px to both sides of it along a row or a column (a braid
+  over a blouse the split left open down to the hair behind).
+- **What moving parts uncover** (with `--lama`, the LaMa inpainting model `big-lama.pt` as lama-cleaner ships it):
+  once the layers are final, each layer's pixels that the layers above cover by over 0.98 are inpainted from what the
+  layer shows, on the layer alone over its mean color (the mask reaching 3 px past them, over the soft rim of the
+  parts above), in a crop 32 px around them scaled to at most 1024 px; the arm variants' art then takes over where
+  it shows those areas. Outline ink copied outward when a layer grows under its neighbours, See-Through's blotches
+  and ghosts of a hand on a book give way to the layer's own texture.
 - **Held objects**: an object piece follows a hand only when that arm's sleeve or hand comes within 6 px of it (a
   pendant hanging from the belt by the hand stays with the body). One both hands touch (their hand layers, or their
   sleeves without one) goes with the body (`lower` below the waist, `chest` above) and both arms swing 0.2 of their
-  `Arm`/`Forearm` turns; otherwise the arm holding an object swings 0.5 of them (what the art hides behind it is a
-  guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them.
+  `Arm`/`Forearm`/`Wrist` turns; otherwise the arm holding an object swings 0.5 of them (what the art hides behind it
+  is a guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them, at most 30° (a
+  cut-out forearm turned further shears into a flat ribbon while it is still fully drawn); the new arm starts as
+  near the old one as its own range allows.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =

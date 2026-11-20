@@ -108,15 +108,17 @@ class VariantTests(unittest.TestCase):
             old = np.interp(t, keys["handwear.right"][:, 0], keys["handwear.right"][:, 1])
             self.assertGreaterEqual(1 - (1 - new) * (1 - old), 0.95)
 
-    def test_old_and_new_arm_meet_halfway(self):
+    def test_old_and_new_arm_meet_halfway_with_the_old_turning_at_most_30_degrees(self):
         from characters.rig.variants import _meet
-        for gap in (10.0, -40.0, 100.0, 170.0):
+        for gap in (10.0, -40.0, 100.0):
             lead, approach = _meet(gap, 90, 90)
             self.assertAlmostEqual(gap + lead - approach, 0.0)
-            self.assertLessEqual(abs(lead), 90)
+            self.assertLessEqual(abs(lead), 30)
             self.assertLessEqual(abs(approach), 90)
-        lead, approach = _meet(200.0, 60, 60)
-        self.assertEqual((lead, approach), (-60.0, 60.0))
+        self.assertEqual(_meet(-40.0, 90, 90), (20.0, -20.0))
+        self.assertEqual(_meet(100.0, 90, 90), (-30.0, 70.0))
+        self.assertEqual(_meet(170.0, 90, 90), (-30.0, 90.0))
+        self.assertEqual(_meet(200.0, 60, 60), (-30.0, 60.0))
 
 
 class FillHiddenTests(unittest.TestCase):
@@ -904,6 +906,30 @@ class PaperTests(unittest.TestCase):
         self.assertTrue(paper(ref, np.zeros((60, 60), np.float32))[0, 0])
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
 
+    def test_white_pockets_between_curls_below_the_chin_are_paper(self):
+        from characters.rig.layers import Layer
+        from characters.rig.matte import hair_pockets
+        ref = np.full((100, 100, 3), 0.5, np.float32)
+        ref[60:70, 20:30] = 1.0
+        ref[60:70, 60:70] = (1.0, 0.96, 1.0)
+        ref[10:20, 40:50] = 1.0
+        ref[80:90, 75:85] = 1.0
+
+        def layer(tag, y0, y1, x0, x1):
+            rgba = np.zeros((100, 100, 4), np.float32)
+            rgba[y0:y1, x0:x1, 3] = 1.0
+            return Layer(tag, tag, rgba)
+
+        ref[40:55, 70:85] = 0.9
+        ref[45:50, 75:80] = 1.0
+        parts = [layer("back hair", 0, 100, 0, 100), layer("face", 5, 30, 35, 55), layer("topwear", 75, 95, 70, 90)]
+        pockets = hair_pockets(ref, parts)
+        self.assertTrue(pockets[65, 25])
+        self.assertFalse(pockets[47, 77])
+        self.assertFalse(pockets[65, 65])
+        self.assertFalse(pockets[15, 45])
+        self.assertFalse(pockets[85, 80])
+
 
 class TailCopyTests(unittest.TestCase):
     def layer(self, name, color, *boxes):
@@ -969,6 +995,127 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(torso.alpha[100, 100], 1.0)
         self.assertTrue(np.allclose(torso.rgba[100, 100, :3], 0.9))
         self.assertEqual(open_gap.alpha.max(), 0.0)
+
+    def test_a_finger_the_art_shows_on_the_lips_is_drawn_over_the_face(self):
+        from characters.rig.layers import arms_over_face
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:120, 60:140] = (0.95, 0.8, 0.75)
+        ref[90:94, 85:115] = (0.8, 0.3, 0.3)
+        ref[80:160, 96:104] = (0.6, 0.45, 0.4)
+        face = self.layer("face", (0.95, 0.8, 0.75), (40, 120, 60, 140))
+        face.rgba[90:94, 85:115, :3] = (0.8, 0.3, 0.3)
+        mouth = self.layer("mouth", (0.8, 0.3, 0.3), (90, 94, 85, 115))
+        arm = self.layer("handwear", (0.6, 0.45, 0.4), (80, 160, 96, 104), (112, 120, 60, 70))
+        hair = self.layer("front hair", (0.1, 0.1, 0.1), (30, 45, 50, 150))
+        parts, taken = arms_over_face([arm, face, mouth, hair], ref)
+        self.assertEqual([q.tag for q in parts], ["face", "mouth", "handwear", "front hair"])
+        self.assertEqual(taken, 40 * 8)
+        self.assertEqual(arm.alpha[85, 100], 1.0)
+        self.assertEqual(arm.alpha[115, 65], 0.0)
+        self.assertEqual(face.alpha[85, 100], 1.0)
+
+    def test_the_face_under_a_finger_crossing_the_jaw_stops_at_the_jaw(self):
+        from characters.rig.layers import arms_over_face
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:120, 60:140] = (0.95, 0.8, 0.75)
+        ref[80:160, 96:104] = (0.6, 0.45, 0.4)
+        face = self.layer("face", (0.95, 0.8, 0.75), (40, 120, 60, 140), (120, 135, 95, 105))
+        arm = self.layer("handwear", (0.6, 0.45, 0.4), (80, 160, 96, 104))
+        parts, taken = arms_over_face([arm, face], ref)
+        self.assertGreater(taken, 0)
+        self.assertEqual(face.alpha[100, 100], 1.0)
+        self.assertEqual(face.alpha[128, 100], 0.0)
+
+    def test_a_flute_plate_the_art_shows_on_the_lips_is_kept_from_patches(self):
+        from characters.rig.layers import objects_over_face
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:120, 60:140] = (0.95, 0.8, 0.75)
+        ref[95:105, 80:120] = (0.75, 0.6, 0.2)
+        flute = self.layer("objects", (0.75, 0.6, 0.2), (95, 105, 40, 120))
+        face = self.layer("face", (0.95, 0.8, 0.75), (40, 120, 60, 140))
+        face.rgba[95:105, 80:120, :3] = (0.75, 0.6, 0.2)
+        mask = objects_over_face([flute, face])
+        self.assertTrue(mask[100, 100])
+        self.assertFalse(mask[60, 100])
+
+    def test_an_arm_the_face_covers_stays_under_it(self):
+        from characters.rig.layers import arms_over_face
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:120, 60:140] = (0.95, 0.8, 0.75)
+        face = self.layer("face", (0.95, 0.8, 0.75), (40, 120, 60, 140))
+        arm = self.layer("handwear", (0.6, 0.45, 0.4), (110, 160, 90, 110))
+        parts, taken = arms_over_face([arm, face], ref)
+        self.assertEqual(taken, 0)
+        self.assertEqual([q.tag for q in parts], ["handwear", "face"])
+
+    def test_the_soft_rim_of_a_lock_goes_with_the_lock_and_the_shirt_keeps_its_color(self):
+        from characters.rig.layers import composite, reproject, unmix_rims
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 40:160] = 0.9
+        ref[80:120, 80:120] = 0.2
+        ref[79, 80:120] = ref[120, 80:120] = 0.55
+        shirt = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 160))
+        lock = self.layer("front hair", (0.2, 0.2, 0.2), (80, 120, 80, 120))
+        owner = reproject([shirt, lock], ref)
+        self.assertTrue(np.allclose(shirt.rgba[79, 100, :3], 0.55))
+        self.assertEqual(unmix_rims([shirt, lock], ref, owner), 80)
+        self.assertTrue(np.allclose(shirt.rgba[79, 100, :3], 0.9, atol=0.01))
+        self.assertAlmostEqual(float(lock.alpha[79, 100]), 0.5, places=2)
+        self.assertTrue(np.allclose(composite([shirt, lock]), ref, atol=0.01))
+
+    def test_a_lash_the_bangs_drew_is_painted_out_of_the_hair(self):
+        from characters.rig.layers import lashes_off_hair
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 104, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
+        hair.rgba[100:104, 90:100, :3] = 0.12
+        hair.rgba[70:72, 60:140, :3] = 0.1
+        self.assertGreaterEqual(lashes_off_hair([lash, hair], np.ones((200, 200, 3), np.float32)), 40)
+        self.assertEqual(hair.alpha[102, 95], 1.0)
+        self.assertTrue(np.allclose(hair.rgba[102, 95, :3], (0.6, 0.6, 0.9), atol=0.02))
+        self.assertTrue(np.allclose(hair.rgba[71, 100, :3], 0.1))
+        self.assertTrue(np.allclose(lash.rgba[102, 95, :3], 0.1))
+
+    def test_a_speck_of_hair_alone_over_an_eye_goes_to_the_lashes(self):
+        from characters.rig.layers import composite, lashes_off_hair
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 106, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (40, 90, 60, 140), (101, 105, 100, 104))
+        hair.rgba[101:105, 100:104, :3] = 0.3
+        before = composite([lash, hair])
+        lashes_off_hair([lash, hair], np.ones((200, 200, 3), np.float32))
+        self.assertEqual(hair.alpha[103, 102], 0.0)
+        self.assertEqual(hair.alpha[60, 100], 1.0)
+        self.assertTrue(np.allclose(composite([lash, hair]), before))
+
+    def test_a_gap_in_the_blouse_under_a_braid_is_filled_from_the_blouse_not_left_to_the_hair_behind(self):
+        from characters.rig.layers import fill_enclosed_under
+        hair = self.layer("back hair", (0.3, 0.3, 0.6), (0, 200, 0, 200))
+        blouse = self.layer("topwear", (0.95, 0.95, 0.95), (60, 200, 40, 160))
+        blouse.rgba[60:200, 90:110, 3] = 0.0
+        braid = self.layer("front hair", (0.4, 0.4, 0.8), (40, 200, 85, 115))
+        outside = self.layer("front hair", (0.4, 0.4, 0.8), (20, 200, 170, 190))
+        self.assertGreater(fill_enclosed_under([hair, blouse, braid, outside]), 2000)
+        self.assertEqual(blouse.alpha[120, 100], 1.0)
+        self.assertTrue(np.allclose(blouse.rgba[120, 100, :3], 0.95))
+        self.assertEqual(blouse.alpha[100, 180], 0.0)
+        self.assertEqual(blouse.alpha[50, 100], 0.0)
+
+    def test_a_copy_of_the_wings_in_the_back_hair_goes(self):
+        from characters.rig.layers import wings_alone
+        hair = self.layer("back hair", (0.3, 0.3, 0.3), (40, 160, 80, 120), (60, 120, 20, 80))
+        wings = self.layer("wings", (0.8, 0.8, 0.9), (60, 120, 20, 80))
+        self.assertGreater(wings_alone([hair, wings]), 0)
+        self.assertEqual(hair.alpha[90, 75], 1.0)
+        self.assertEqual(hair.alpha[90, 30], 0.0)
+
+    def test_a_layer_grows_far_only_under_still_parts(self):
+        from characters.rig.layers import grow_underlays
+        torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 100))
+        skirt = self.layer("bottomwear", (0.2, 0.2, 0.2), (40, 160, 100, 140))
+        sleeve = self.layer("handwear", (0.3, 0.3, 0.8), (60, 80, 20, 40))
+        grow_underlays([torso, skirt, sleeve])
+        self.assertEqual(torso.alpha[100, 108], 1.0)
+        self.assertEqual(torso.alpha[70, 38], 1.0)
+        self.assertEqual(torso.alpha[70, 30], 0.0)
 
     def test_a_plume_on_the_hat_taken_for_tail_goes_to_the_hat(self):
         from characters.rig.layers import tail_off_head

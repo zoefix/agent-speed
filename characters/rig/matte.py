@@ -51,6 +51,48 @@ def paper(reference, matte, white=0.96, cut=0.5, pocket=0.8, covered=None, unsur
     return bare
 
 
+HAIR_TAGS = ("back hair", "front hair")
+
+
+def hair_pockets(reference, parts, white=0.96, pure=0.985, min_px=20, hair_share=0.95, rim=0.75):
+    """Paper between curls of long hair: near-white pockets below the chin, not on the image edge, of at least `min_px`,
+    that only the hair layers cover (`hair_share` of the pocket, no other layer over half of it), that are as white
+    as paper (mean darkest channel over `pure`; a highlight on the hair has the hair's tint) and that the hair's ink
+    or color frames (mean darkest channel on a 2 px ring under `rim`: white hair around a highlight is light). The
+    matte calls the whole mass of hair figure, so paper() keeps them."""
+    face = next((p for p in parts if p.tag == "face"), None)
+    if face is None:
+        return np.zeros(reference.shape[:2], bool)
+    chin = np.nonzero((face.alpha > 0.5).any(axis=1))[0].max()
+    hair = np.zeros(reference.shape[:2], bool)
+    other = np.zeros(reference.shape[:2], bool)
+    for p in parts:
+        if p.tag in HAIR_TAGS:
+            hair |= p.alpha > 0.5
+        else:
+            other |= p.alpha > 0.5
+    darkest = reference.min(axis=2)
+    labels, count = ndimage.label(darkest > white)
+    if not count:
+        return np.zeros(reference.shape[:2], bool)
+    index = range(1, count + 1)
+    edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    size = np.asarray(ndimage.sum(np.ones_like(darkest), labels, index))
+    in_hair = np.asarray(ndimage.mean(hair, labels, index))
+    in_other = np.asarray(ndimage.mean(other, labels, index))
+    whiteness = np.asarray(ndimage.mean(darkest, labels, index))
+    slices = ndimage.find_objects(labels)
+    top = np.array([s[0].start if s is not None else 0 for s in slices])
+    ok = (size >= min_px) & (in_hair >= hair_share) & (in_other < 0.5) & (whiteness > pure) & (top > chin)
+    for k in np.flatnonzero(ok):
+        box = tuple(slice(max(0, a.start - 3), a.stop + 3) for a in slices[k])
+        pocket = labels[box] == k + 1
+        ring = ndimage.binary_dilation(pocket, iterations=2) & ~pocket
+        if not ring.any() or darkest[box][ring].mean() >= rim:
+            ok[k] = False
+    return np.isin(labels, np.setdiff1d(1 + np.flatnonzero(ok), edge))
+
+
 def clear_paper(parts, bare):
     """Makes every layer transparent where the art shows bare paper. Returns how many layer pixels it cleared."""
     cleared = 0

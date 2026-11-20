@@ -88,11 +88,17 @@ def _backdrop(ordered, owner, hidden=L.HIDDEN_TAGS):
             "hidden": L.coverage([layer for layer in ordered if layer.tag in hidden])}
 
 
+# The old arm turns at most this far toward the new one: a cut-out forearm turned further shears into a flat ribbon
+# while it is still fully drawn, before and after the crossfade.
+LEAD_MAX_DEG = 30.0
+
+
 def _meet(gap, base_range, variant_range):
-    """Splits an angle gap (base minus variant) so the old arm turns toward the new one and the new one starts
-    where they meet; returns (base turn, variant offset)."""
+    """Splits an angle gap (base minus variant) so the old arm turns toward the new one (at most LEAD_MAX_DEG) and
+    the new one starts where they meet, or as near as its range allows; returns (base turn, variant offset)."""
     approach = float(np.clip(gap / 2, -variant_range, variant_range))
-    lead = float(np.clip(approach - gap, -base_range, base_range))
+    reach = min(base_range, LEAD_MAX_DEG)
+    lead = float(np.clip(approach - gap, -reach, reach))
     return lead, float(np.clip(gap + lead, -variant_range, variant_range))
 
 

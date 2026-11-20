@@ -183,6 +183,8 @@ def main(argv=None):
     ap.add_argument("--spec", help="the character's spec: its `rig` hints (tail, tailSwing, wings, ears, "
                                    "staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
+    ap.add_argument("--lama", help="LaMa inpainting model (big-lama.pt, TorchScript) that repaints what moving parts "
+                                   "uncover")
     ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
     ap.add_argument("--idle", help="the character's idle pose (its built package): refuse this pose if it draws no "
                                    "feet while the idle pose does")
@@ -207,6 +209,10 @@ def main(argv=None):
         from . import matte
         figure = matte.figure(reference, args.matte)
         bare = matte.paper(reference, figure, covered=layers.coverage(parts) > 0.5)
+        pockets = matte.hair_pockets(reference, parts) & ~bare
+        if pockets.any():
+            print(f"paper between curls of hair: {int(pockets.sum())} px")
+            bare |= pockets
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
     face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
@@ -224,13 +230,29 @@ def main(argv=None):
             print(f"tail drawn into the back hair given back to the tail: {moved} px")
     layers.seal_tail(parts, reference, paper=bare)
     parts, copies = layers.tail_alone(parts, reference)
+    wing_copies = layers.wings_alone(parts)
+    if wing_copies:
+        print(f"copies of the wings cleared from the layers under them: {wing_copies} px")
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
     arms_taken = layers.objects_over_arms(parts, reference)
+    parts, over_face = layers.arms_over_face(parts, reference)
+    on_face = layers.objects_over_face(parts)
+    if on_face.any():
+        print(f"objects the art shows over the face, kept by face patches: {int(on_face.sum())} px")
+    if over_face:
+        print(f"arms the art shows over the face drawn above it: {over_face} px")
     owner = layers.reproject(parts, reference)
     print(f"hidden paint settled: {layers.clean_hidden(parts, owner)} px")
+    print(f"rims of moving parts taken off the layers under them: {layers.unmix_rims(parts, reference, owner)} px")
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
+    if args.lama:
+        from . import inpaint
+        paint = lambda image, mask: inpaint.lama(image, mask, args.lama)  # noqa: E731
+    else:
+        paint = None
+    print(f"lashes the bangs drew painted out of the hair: {layers.lashes_off_hair(parts, reference, paint)} px")
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
     parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
     parts, behind = layers.arms_behind_objects(parts, arms_taken)
@@ -309,6 +331,10 @@ def main(argv=None):
             lm["twoHanded"] = True
             print(f"{p.name} held in both hands: goes with the body")
 
+    if args.lama:
+        from . import inpaint
+        print(f"hidden paint inpainted: {inpaint.repaint_hidden(parts, args.lama)} px")
+
     loaded, rejected = [], []
     # A static object (a wheelchair with its stand) stays the base's: a gesture on its side swaps the arm alone, so no
     # second copy of the object fades in with it.
@@ -319,7 +345,7 @@ def main(argv=None):
         patch_base = None
         for spec in variants.load_manifest(args.variants):
             if spec["kind"] == "patch" and patch_base is None:
-                patch_base = patches.Base(parts, reference, lm["face"])
+                patch_base = patches.Base(parts, reference, lm["face"], keep=on_face)
             try:
                 v = variants.load(spec, reference, size, lm, held_side, base_names, patch_base, hidden)
             except patches.Rejected as e:

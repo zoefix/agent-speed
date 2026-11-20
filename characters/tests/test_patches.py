@@ -108,6 +108,16 @@ class RegionTests(unittest.TestCase):
             ["eyewhite.left", "eyewhite.right", "irides.left", "irides.right", "eyebrow.left", "eyebrow.right",
              "nose", "mouth"]))
 
+    def test_what_the_art_shows_over_the_face_stays_out_of_every_region(self):
+        keep = np.zeros(self.art.shape[:2], bool)
+        keep[225:235, 195:215] = True
+        base = patches.Base(self.parts, self.art, face_box(self.parts), keep=keep)
+        for name in ("face", "mouth"):
+            r = base.region(name)
+            self.assertFalse(r["mask"][230, 205], name)
+            self.assertFalse(r["mask"][224, 205], name)
+        self.assertTrue(base.region("mouth")["mask"][229, int(200 - 0.2 * base.fw)])
+
     def test_mouth_region_spans_the_mouth_from_below_the_nose_to_above_the_chin(self):
         r = self.base.region("mouth")
         fw = self.base.fw

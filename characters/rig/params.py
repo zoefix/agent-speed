@@ -18,8 +18,8 @@ VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
 VARIANT_FOREARM_RANGE = 90.0
 BEND_RANGE = 90.0
-# The arm holding an object swings this much of the free arm's turns: what the art hides behind a book or a fan is a
-# guess, which a wide swing of the object would uncover.
+# The arm holding an object swings and its wrist turns this much of the free arm's: what the art hides behind a book,
+# a fan or a purse is a guess, which a wide swing of the object would uncover.
 HELD_SWING = 0.5
 # An object held in both hands: both arms keep to this much, so neither hand leaves it.
 TWO_HANDED_SWING = 0.2
@@ -116,7 +116,11 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
             fist = hand["open"] < FIST
             params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.1 if fist else -0.5, 0.1 if fist else 1.0)]
             params += [param(f"Finger.{side}.{i}", -0.08 if fist else -0.4, 0.12 if fist else 1.0) for i in range(5)]
-            drivers += hand_drivers(side, hand)
+            held = TWO_HANDED_SWING if lm.get("twoHanded") else HELD_SWING if side == lm.get("objectSide") else 1.0
+            for d in hand_drivers(side, hand):
+                if d["param"] == f"Wrist.{side}":
+                    d["keys"] = [[k, v * held] for k, v in d["keys"]]
+                drivers.append(d)
 
     if has("hairBack1"):
         bh = lm["backHair"]
