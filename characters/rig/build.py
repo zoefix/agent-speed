@@ -68,14 +68,20 @@ def add_appendages(parts, lm, bones, hints):
     return tail_lm, wing_lm, ear_lm, spine
 
 
-def split_hands(parts, found, reference, sam):
+def split_hands(parts, found, reference, sam, own=0.5):
     """Cuts each detected hand out of its arm layer into its own part, drawn right above the arm. With a SAM
-    checkpoint the cut follows the drawn outline of the hand."""
+    checkpoint the cut follows the drawn outline of the hand. A hand whose own arm layer draws under `own` of SAM's
+    mask is drawn by another layer (the split gave it to the other sleeve): it stays where it is, since clearing it
+    from that layer and cutting it from its own arm would leave a smear where the hand was."""
     masks = {}
     if sam:
         from . import segment
         for side, hand in found.items():
             mask = segment.hand_mask(reference, hand, sam)
+            arm = next((p for p in parts if p.tag == "handwear" and p.side == side), None)
+            if mask is not None and (arm is None or float((arm.alpha[mask] > 0.5).mean()) < own):
+                print(f"hand {side}: its arm layer draws little of it, the hand stays where it is drawn")
+                continue
             if mask is not None:
                 masks[side] = mask
                 cleared = hands.clear_ghosts(parts, mask & hands.past_cut(mask.shape, hand), keep=f"handwear.{side}")
