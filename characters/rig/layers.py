@@ -470,6 +470,30 @@ def objects_over_face(layers, min_px=30):
     return out
 
 
+def features_into_face(layers, keep, reach=1):
+    """Gives the face layer what the features (eyes, brows, nose, mouth) draw where the art shows an object over the
+    face (`keep`, from objects_over_face, grown by `reach` px): See-Through often paints a flute's lip plate into the
+    mouth, and a face patch fades the features out but leaves the face as it is there. The rest pose stays the same.
+    Returns the pixels moved."""
+    face = next((layer for layer in layers if layer.tag == "face"), None)
+    if face is None or not keep.any():
+        return 0
+    features = [layer for layer in layers[layers.index(face) + 1:] if layer.tag in FACE_TAGS and layer.tag != "face"]
+    area = ndimage.binary_dilation(keep, iterations=reach)
+    area &= coverage(features) > 0 if features else False
+    if not area.any():
+        return 0
+    ys, xs = np.nonzero(area)
+    box = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
+    color, cover = _over([face] + features, box)
+    here = area[box]
+    straight = color / np.maximum(cover, 1e-6)[..., None]
+    face.rgba[box][here] = np.concatenate([straight, cover[..., None]], axis=-1)[here]
+    for layer in features:
+        layer.rgba[box][..., 3][here] = 0.0
+    return int(here.sum())
+
+
 def arms_behind_objects(layers, taken, min_px=300, apart=0.3):
     """Gives each split arm what objects_over_arms took near it (each pixel to the nearest arm of that tag), its paint
     settled against the arm's own colors (_settle), and draws the objects it lies under right above that arm. An arm
@@ -613,6 +637,63 @@ def wings_alone(layers, reach=6):
     return cleared
 
 
+# Layers that keep still over the back hair: what they hide of it shows only when the hair itself swings out.
+BODY_TAGS = ("neck", "topwear", "neckwear", "bottomwear", "legwear", "footwear")
+
+
+def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6):
+    """Leaves the back hair only near where it shows: See-Through paints a whole sheet of it behind the body (flat,
+    with the gaps between curls drawn as outlines), and LaMa repaints it flat; once the hair swings out past the body
+    that sheet shows as a slab. Back hair the body's clothes (`BODY_TAGS`) cover by `cover`, more than `reach` px from
+    where the back hair shows, goes, fading out over the last half of that reach (no straight cut edge once it swings
+    out): the swing uncovers the stage behind, as between the strands. What arms, hands, objects or the front hair
+    cover stays, since their own moves uncover it. A bit of it then cut off from the rest (under `island` of its
+    largest piece), seen through a gap in the clothes that frame it (`enclosed` of its rim), would float once the hair
+    swings: it goes into the clothing layer framing it most and keeps still with it (the rest pose stays the same).
+    Returns the pixels cleared."""
+    cleared = 0
+    for hair in [layer for layer in layers if layer.tag == "back hair"]:
+        above = layers[layers.index(hair) + 1:]
+        body = [layer for layer in above if layer.tag in BODY_TAGS]
+        if not body:
+            continue
+        solid = hair.alpha > 0.02
+        shown = (hair.alpha > 0.5) & (coverage(above) < 0.5)
+        if not shown.any():
+            continue
+        behind = solid & (coverage(body) > cover)
+        dist = ndimage.distance_transform_edt(~shown)
+        fade = np.clip((reach - dist) / (reach / 2), 0, 1).astype(np.float32)
+        hair.rgba[..., 3] = np.where(behind, hair.alpha * fade, hair.alpha)
+        cleared += int((behind & (dist > reach)).sum())
+        _islands_to_clothes(hair, layers, body, island, enclosed)
+    return cleared
+
+
+def _islands_to_clothes(hair, layers, body, island, enclosed):
+    mass = hair.alpha > 0.5
+    labels, count = ndimage.label(mass, structure=np.ones((3, 3)))
+    if count < 2:
+        return
+    sizes = np.asarray(ndimage.sum(mass, labels, range(1, count + 1)))
+    for k in 1 + np.flatnonzero(sizes < island * sizes.max()):
+        core = labels == k
+        piece = ndimage.binary_dilation(core, iterations=2) & (hair.alpha > 0) & ~(mass & ~core)
+        ring = ndimage.binary_dilation(piece, iterations=2) & ~piece
+        shares = [float((layer.alpha[ring] > 0.5).mean()) for layer in body]
+        if max(shares) < enclosed:
+            continue
+        target = body[int(np.argmax(shares))]
+        between = layers[layers.index(hair) + 1:layers.index(target)]
+        if between and float(coverage(between)[piece].max()) > 0.05:
+            continue
+        a, t = hair.alpha[piece][:, None], target.alpha[piece][:, None]
+        total = t + a * (1 - t)
+        color = (target.rgba[piece][:, :3] * t + hair.rgba[piece][:, :3] * a * (1 - t)) / np.maximum(total, 1e-6)
+        target.rgba[piece] = np.concatenate([color, total], axis=1)
+        hair.rgba[..., 3][piece] = 0.0
+
+
 def tail_alone(layers, reference, share=0.5, min_px=2000):
     """Leaves the tail the only drawing of the tail. The split also paints the tail into the layers around it: a
     tail hanging in front of the skirt goes behind the skirt with a copy of it in the skirt, and a tail curling over
@@ -735,22 +816,36 @@ def split_pairs(layers, center_x, min_share=0.03):
 
 
 EYE_TAGS = ("eyewhite", "irides", "eyelash")
+# Name suffix of the lash tips lashes_off_hair lifts out of the hair, above it.
+TIP = ".tip"
 
 
-def lashes_off_hair(layers, reference, inpaint=None, reach=4, dark=0.4, apart=0.2, local=11, island=80, faint=0.05):
-    """Paints out of the front hair what it drew of the eyes: See-Through puts a lash seen through the bangs into the
-    hair, and a face patch lies under the hair, so a closed or lowered eye left that piece of lash on the hair. A
-    hair pixel (opaque over `faint`) over an eye's layers (grown by `reach` px) that is dark (luminance under `dark`) and darker than the
-    hair around it (its `local` px median) by `apart`, grown by 1 px, is repainted from the art around it by
-    `inpaint(image, mask)` with the eyes masked as well (LaMa: the bangs go on over the skin), or a blur of the hair's
-    other colors without it (the lash tip under the bangs gives way to the bangs at rest too). A piece of the hair
-    under `island` px lying over an eye goes to the nearest lash layer. Returns the pixels repainted or moved."""
+def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, faint=0.05, ring_alpha=0.5, beyond=12,
+                    lash_share=0.75):
+    """Takes out of the front hair what it drew of the eyes: See-Through puts a lash seen through the bangs (or drawn
+    over them, as a winged liner) into the hair, and a face patch lies under the hair, so a closed or lowered eye left
+    that piece of lash on the hair.
+
+    A hair pixel (opaque over `faint`) over an eye's layers (grown by `reach` px) that is dark (luminance under
+    `dark`) and darker than the hair around it (the median of its opaque pixels in a `local` px square, wide enough
+    that the lash is not most of it) by `apart` is a lash when its dark stroke (8-connected, followed up to `beyond`
+    px past the eyes) lies over the eyes by `lash_share` at least: the outline of a strand runs on past them and stays.
+    Those pixels, grown by 1 px, take a blur of the hair's other colors (its dark strokes left out, so no grey smear;
+    LaMa drew the strand's body color down into pale tips). What the art showed there goes to a tip layer of the
+    nearest lash, right above the hair: opaque on the lash pixels, at least `ring_alpha` on the 1 px around them,
+    colored so the rest pose stays the same (only where the layers up to the hair cover the pixel fully). The tip is
+    an eyelash layer, so it follows the eye and fades out with the lashes under a face patch, leaving the bangs.
+
+    A piece of the hair under `island` px lying over an eye goes to the nearest lash layer as it is. Returns the pixels
+    taken or moved."""
     hair = [layer for layer in layers if layer.tag == "front hair"]
     eyes = [layer for layer in layers if layer.tag in EYE_TAGS]
     if not hair or not eyes:
         return 0
     eye = ndimage.binary_dilation(coverage(eyes) > 0.3, iterations=reach)
     lashes = [layer for layer in eyes if layer.tag == "eyelash"] or eyes
+    nearest = np.argmin(np.stack([ndimage.distance_transform_edt(~(lash.alpha > 0.3)) for lash in lashes]), axis=0)
+    tips = [Layer(lash.name + TIP, lash.tag, np.zeros_like(lash.rgba), lash.side) for lash in lashes]
     repainted = 0
     for h in hair:
         solid = h.alpha > faint
@@ -762,8 +857,6 @@ def lashes_off_hair(layers, reference, inpaint=None, reach=4, dark=0.4, apart=0.
             inside = np.asarray(ndimage.mean(eye, labels, range(1, count + 1)))
             specks = np.isin(labels, 1 + np.flatnonzero((sizes < island) & (inside > 0.9)))
             if specks.any():
-                dist = np.stack([ndimage.distance_transform_edt(~(lash.alpha > 0.3)) for lash in lashes])
-                nearest = np.argmin(dist, axis=0)
                 a = h.alpha
                 for k, lash in enumerate(lashes):
                     mine = specks & (nearest == k)
@@ -781,23 +874,54 @@ def lashes_off_hair(layers, reference, inpaint=None, reach=4, dark=0.4, apart=0.
             continue
         luma = h.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
         ys, xs = np.nonzero(near)
-        pad = 2 * local
+        pad = 2 * local + beyond
         box = (slice(max(ys.min() - pad, 0), ys.max() + pad + 1), slice(max(xs.min() - pad, 0), xs.max() + pad + 1))
-        around = np.where((h.alpha > 0.5)[box], luma[box], np.nan)
-        median = ndimage.generic_filter(around, np.nanmedian, size=local, mode="nearest")
-        take = near[box] & (luma[box] < dark) & (luma[box] < median - apart)
-        if not take.any():
+        shade = luma[box]
+        around = np.where((h.alpha > 0.5)[box], shade, np.nan)
+        strokes = ndimage.binary_dilation(eye[box], iterations=beyond) & solid[box] & (shade < dark)
+        r = local // 2
+        for y, x in zip(*np.nonzero(strokes)):
+            window = around[max(y - r, 0):y + r + 1, max(x - r, 0):x + r + 1]
+            window = window[~np.isnan(window)]
+            strokes[y, x] = window.size > 0 and shade[y, x] < np.median(window) - apart
+        labels, count = ndimage.label(strokes, structure=np.ones((3, 3)))
+        if not count:
             continue
-        take = ndimage.binary_dilation(take, iterations=1) & solid[box]
+        share = np.asarray(ndimage.mean(eye[box], labels, range(1, count + 1)))
+        core = np.isin(labels, 1 + np.flatnonzero(share >= lash_share)) & near[box]
+        if not core.any():
+            continue
+        upto = layers[:layers.index(h) + 1]
+        shown, cover = _over(upto, box)
+        # Only where the layers up to the hair cover the pixel fully can a tip over it keep the rest pose.
+        take = ndimage.binary_dilation(core, iterations=1) & solid[box] & (cover > 0.999)
+        core &= take
         view = h.rgba[box]
-        if inpaint is not None:
-            # The eyes are masked too, so the fill continues the bangs and the skin around, not the lash itself.
-            colors = inpaint(reference[box], take | ndimage.binary_dilation(coverage(eyes)[box] > 0.05, iterations=2))
-        else:
-            colors = _smooth_fill(view[..., :3].copy(), solid[box] & ~take)
+        colors = _smooth_fill(view[..., :3].copy(), solid[box] & ~take & ~strokes)
         view[..., :3] = np.where(take[..., None], colors, view[..., :3])
         repainted += int(take.sum())
+        below, _ = _over(upto, box)
+        # On the ring the tip is as clear as `ring_alpha` allows while a color in 0..1 still gives the art back.
+        need = np.maximum(1 - shown / np.maximum(below, 1e-6), (shown - below) / np.maximum(1 - below, 1e-6)).max(-1)
+        t = np.where(core, 1.0, np.clip(np.maximum(ring_alpha, need), 0, 1)).astype(np.float32) * take
+        color = np.clip((shown - below * (1 - t)[..., None]) / np.maximum(t, 1e-6)[..., None], 0, 1)
+        for k, tip in enumerate(tips):
+            mine = (t > 0) & (nearest[box] == k)
+            tip.rgba[box][mine] = np.concatenate([color, t[..., None]], axis=-1)[mine]
+    at = max(layers.index(h) for h in hair) + 1
+    layers[at:at] = [tip for tip in tips if tip.alpha.max() > 0]
     return repainted
+
+
+def _over(layers, box):
+    """The premultiplied color and the coverage of `layers` over nothing, within `box`."""
+    color = np.zeros(layers[0].rgba[box].shape[:2] + (3,), np.float32)
+    cover = np.zeros(color.shape[:2], np.float32)
+    for layer in layers:
+        a = layer.alpha[box]
+        color = layer.rgba[box][..., :3] * a[..., None] + color * (1 - a)[..., None]
+        cover = a + cover * (1 - a)
+    return color, cover
 
 
 def _segment_distance(xx, yy, a, b):

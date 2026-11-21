@@ -1069,11 +1069,86 @@ class TailCopyTests(unittest.TestCase):
         hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
         hair.rgba[100:104, 90:100, :3] = 0.12
         hair.rgba[70:72, 60:140, :3] = 0.1
-        self.assertGreaterEqual(lashes_off_hair([lash, hair], np.ones((200, 200, 3), np.float32)), 40)
+        self.assertGreaterEqual(lashes_off_hair([lash, hair]), 40)
         self.assertEqual(hair.alpha[102, 95], 1.0)
         self.assertTrue(np.allclose(hair.rgba[102, 95, :3], (0.6, 0.6, 0.9), atol=0.02))
         self.assertTrue(np.allclose(hair.rgba[71, 100, :3], 0.1))
         self.assertTrue(np.allclose(lash.rgba[102, 95, :3], 0.1))
+
+    def test_a_lash_tip_along_the_edge_of_the_bangs_is_painted_out_even_where_it_is_most_of_the_hair_near_it(self):
+        from characters.rig.layers import lashes_off_hair
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 112, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
+        hair.rgba[104:110, 92:100, :3] = 0.15
+        lashes_off_hair([lash, hair])
+        self.assertTrue(np.allclose(hair.rgba[107, 97, :3], (0.6, 0.6, 0.9), atol=0.02))
+
+    def test_a_lash_drawn_over_the_bangs_stays_at_rest_in_a_tip_layer_above_the_hair(self):
+        from characters.rig.layers import composite, lashes_off_hair
+        skin = self.layer("face", (0.95, 0.85, 0.8), (40, 160, 40, 160))
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 112, 80, 120))
+        lash.side = "left"
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
+        hair.rgba[104:110, 92:100, :3] = 0.15
+        parts = [skin, lash, hair]
+        before = composite(parts)
+        lashes_off_hair(parts)
+        self.assertEqual([p.name for p in parts], ["face", "eyelash", "front hair", "eyelash.tip"])
+        tip = parts[3]
+        self.assertEqual((tip.tag, tip.side), ("eyelash", "left"))
+        self.assertEqual(tip.alpha[107, 97], 1.0)
+        self.assertEqual(tip.alpha[80, 100], 0.0)
+        self.assertTrue(np.allclose(composite(parts), before, atol=1e-5))
+        self.assertTrue(np.allclose(composite(parts[:3])[107, 97], (0.6, 0.6, 0.9), atol=0.02))
+
+    def test_back_hair_far_behind_the_body_goes_but_not_near_where_it_shows_or_behind_an_arm(self):
+        from characters.rig.layers import back_hair_alone
+        hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
+        top = self.layer("topwear", (0.9, 0.9, 0.9), (30, 190, 50, 150))
+        arm = self.layer("handwear", (0.9, 0.9, 0.9), (60, 120, 150, 175))
+        self.assertGreater(back_hair_alone([hair, top, arm]), 2000)
+        self.assertEqual(hair.alpha[100, 100], 0.0)
+        self.assertEqual(hair.alpha[100, 55], 1.0)
+        self.assertEqual(hair.alpha[25, 100], 1.0)
+        self.assertEqual(hair.alpha[90, 170], 1.0)
+
+    def test_a_bit_of_back_hair_seen_through_a_gap_in_the_clothes_keeps_still_with_them(self):
+        from characters.rig.layers import back_hair_alone, composite
+        hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
+        top = self.layer("topwear", (0.9, 0.9, 0.9), (30, 190, 50, 150))
+        top.rgba[100:104, 100:104, 3] = 0.0
+        before = composite([hair, top])
+        back_hair_alone([hair, top])
+        self.assertEqual(hair.alpha[102, 102], 0.0)
+        self.assertEqual(top.alpha[102, 102], 1.0)
+        self.assertTrue(np.allclose(top.rgba[102, 102, :3], (0.6, 0.3, 0.1)))
+        self.assertTrue(np.allclose(composite([hair, top]), before, atol=1e-5))
+
+    def test_a_lip_plate_the_mouth_drew_over_a_flute_goes_to_the_face_so_a_patch_keeps_it(self):
+        from characters.rig.layers import composite, features_into_face
+        face = self.layer("face", (0.95, 0.85, 0.8), (40, 160, 40, 160))
+        mouth = self.layer("mouth", (0.8, 0.3, 0.3), (120, 130, 80, 120))
+        mouth.rgba[120:130, 100:120, :3] = 0.5
+        keep = np.zeros((200, 200), bool)
+        keep[118:132, 100:125] = True
+        before = composite([face, mouth])
+        self.assertGreater(features_into_face([face, mouth], keep), 150)
+        self.assertTrue(np.allclose(composite([face, mouth]), before, atol=1e-5))
+        self.assertEqual(mouth.alpha[125, 110], 0.0)
+        self.assertEqual(mouth.alpha[125, 90], 1.0)
+        self.assertTrue(np.allclose(face.rgba[125, 110, :3], 0.5))
+
+    def test_an_outline_of_a_strand_crossing_an_eye_stays_in_the_hair(self):
+        from characters.rig.layers import lashes_off_hair
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 112, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (40, 130, 60, 140))
+        for y in range(50, 130):
+            hair.rgba[y, 100 + (y - 50) // 8:102 + (y - 50) // 8, :3] = 0.15
+        before = hair.rgba.copy()
+        parts = [lash, hair]
+        lashes_off_hair(parts)
+        self.assertTrue(np.allclose(hair.rgba, before))
+        self.assertEqual(len(parts), 2)
 
     def test_a_speck_of_hair_alone_over_an_eye_goes_to_the_lashes(self):
         from characters.rig.layers import composite, lashes_off_hair
@@ -1081,7 +1156,7 @@ class TailCopyTests(unittest.TestCase):
         hair = self.layer("front hair", (0.6, 0.6, 0.9), (40, 90, 60, 140), (101, 105, 100, 104))
         hair.rgba[101:105, 100:104, :3] = 0.3
         before = composite([lash, hair])
-        lashes_off_hair([lash, hair], np.ones((200, 200, 3), np.float32))
+        lashes_off_hair([lash, hair])
         self.assertEqual(hair.alpha[103, 102], 0.0)
         self.assertEqual(hair.alpha[60, 100], 1.0)
         self.assertTrue(np.allclose(composite([lash, hair]), before))
@@ -1279,6 +1354,30 @@ class ObjectPieceTests(unittest.TestCase):
         lone = {"arms": {"single": {"shoulder": (100, 100), "elbow": (150, 130), "hand": (150, 150), "wrist": None}},
                 "hands": {}}
         self.assertEqual(holding_side(pieces[1], lone, 20), "single")
+
+
+class ClaspedHandTests(unittest.TestCase):
+    def hand(self, side, box):
+        from characters.rig.layers import Layer
+        rgba = np.zeros((100, 100, 4), np.float32)
+        y0, y1, x0, x1 = box
+        rgba[y0:y1, x0:x1] = 1
+        return Layer(f"hand.{side}", "hand", rgba, side)
+
+    def test_a_hand_over_the_other_counts_as_clasped_and_hands_apart_do_not(self):
+        from characters.rig.build import hands_clasped
+        self.assertTrue(hands_clasped([self.hand("left", (40, 60, 30, 50)), self.hand("right", (40, 60, 40, 60))]))
+        self.assertFalse(hands_clasped([self.hand("left", (40, 60, 10, 30)), self.hand("right", (40, 60, 60, 80))]))
+        self.assertFalse(hands_clasped([self.hand("left", (40, 60, 30, 50))]))
+
+    def test_clasped_hands_keep_arms_and_shoulders_together(self):
+        from characters.rig import params
+        names = ["shoulder.left", "arm.left", "forearm.left"]
+        for together, factor in ((False, params.ARM_SWING), (True, params.ARM_SWING * params.TWO_HANDED_SWING)):
+            _, drivers, _ = params.build({"faceWidth": 100.0, "twoHanded": together}, names)
+            keys = {d["param"]: d["keys"][-1][1] for d in drivers}
+            self.assertAlmostEqual(keys["Shoulder.left"], -7.0 * factor)
+            self.assertAlmostEqual(keys["Arm.left"], params.ARM_RANGES["left"][0] * factor)
 
 
 class PropHintTests(unittest.TestCase):

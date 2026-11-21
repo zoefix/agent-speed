@@ -116,6 +116,17 @@ def touches_hand(layer, parts, side, reach=6):
     return any((near & (p.alpha > 0.5)).any() for p in own)
 
 
+def hands_clasped(parts, share=0.15):
+    """Whether one hand lies over the other (clasped, or one resting on the other) and hides at least `share` of it:
+    what it hides is a guess, a grey blob once either hand moves away."""
+    hands = [p for p in parts if p.tag == "hand" and p.side in ("left", "right")]
+    if len({p.side for p in hands}) < 2:
+        return False
+    lower, upper = hands[0], hands[-1]
+    solid = lower.alpha > 0.5
+    return bool(solid.any()) and float((solid & (upper.alpha > 0.5)).sum() / solid.sum()) >= share
+
+
 def touches_arm(layer, parts, side, reach=6):
     """Whether the arm of `side` (its sleeve or hand layers) comes within `reach` px of an object piece."""
     near = ndimage.binary_dilation(layer.alpha > 0.3, iterations=reach)
@@ -247,12 +258,8 @@ def main(argv=None):
     print(f"rims of moving parts taken off the layers under them: {layers.unmix_rims(parts, reference, owner)} px")
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
-    if args.lama:
-        from . import inpaint
-        paint = lambda image, mask: inpaint.lama(image, mask, args.lama)  # noqa: E731
-    else:
-        paint = None
-    print(f"lashes the bangs drew painted out of the hair: {layers.lashes_off_hair(parts, reference, paint)} px")
+    print(f"lashes the bangs drew taken out of the hair: {layers.lashes_off_hair(parts)} px")
+    print(f"back hair far behind the body cleared: {layers.back_hair_alone(parts)} px")
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
     parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
     parts, behind = layers.arms_behind_objects(parts, arms_taken)
@@ -316,7 +323,8 @@ def main(argv=None):
             object_attach[name] = "lower"
     if follow and "prop" in object_attach:
         object_attach["prop"] = follow
-    if character.get("motion", {}).get("poseHands", {}).get(args.band) in AT_MOUTH:
+    playing = character.get("motion", {}).get("poseHands", {}).get(args.band) in AT_MOUTH
+    if playing:
         # An instrument at the lips goes with the head; the director holds head and arms still while it plays.
         for name, bone in object_attach.items():
             if bone.split(".")[0] in ("hand", "forearm"):
@@ -330,6 +338,17 @@ def main(argv=None):
             object_attach[p.name] = "lower" if ys.mean() > lm["waist"][1] else "chest"
             lm["twoHanded"] = True
             print(f"{p.name} held in both hands: goes with the body")
+    if not lm.get("twoHanded") and hands_clasped(parts):
+        lm["twoHanded"] = True
+        print("hands clasped: both arms keep together")
+    if playing:
+        # An instrument at the lips: the mouth stays as drawn under every face patch; only eyes and brows change.
+        try:
+            on_face = on_face | patches.mouth_area(parts, lm["face"], on_face.shape)
+        except patches.Rejected:
+            pass
+    if on_face.any():
+        print(f"features over an object on the face given to the face: {layers.features_into_face(parts, on_face)} px")
 
     if args.lama:
         from . import inpaint

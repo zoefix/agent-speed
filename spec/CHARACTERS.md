@@ -290,6 +290,17 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   of 30 px or more: a flute's lip plate at the lips, which See-Through often paints into the face too) the face keeps
   what the art shows and no face patch replaces it (each region leaves it out, grown by 1 px), so an edit that left
   the plate out never makes it pop in and out.
+  What the features (eyes, brows, nose, mouth) draw there goes into the face layer (the rest pose stays the same):
+  See-Through often paints the plate into the mouth, which a face patch fades out. In a pose that plays an instrument
+  at the lips (`poseHands` in the at-mouth set: the flute) the whole mouth area (`patches.mouth_area`) is kept so:
+  every face patch then changes the eyes and brows only, as the mouth stays on the instrument.
+- **Back hair alone**: See-Through paints a whole sheet of back hair behind the body (flat, the gaps between curls
+  drawn as outlines), which showed as a slab once the hair swung out past the body. Back hair the body's clothes
+  (neck, top, neckwear, bottom, legwear, shoes) cover by over 0.995, more than 16 px from where the back hair shows,
+  goes, fading out from 8 px on (no straight cut edge once it swings out); what arms, hands, objects or the bangs
+  cover stays, since their own moves uncover it. A bit then cut off from the rest (under 5 % of its largest piece),
+  seen through a gap in the clothes that frame 60 % of its rim, would float once the hair swings: it goes into the
+  clothing layer framing it most (the rest pose stays the same) and keeps still with it.
 - **Hidden paint**: what See-Through guessed of a layer under the layers drawn over it, where it stands apart from a
   blur of the colors that layer shows (mean channel difference over 0.3: a dark slab on a white blouse, a hand drawn
   into the book under it), takes that blur, so a part moving away uncovers the layer's own colors.
@@ -297,11 +308,17 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   of a sleeve, hand, object, the bangs or locks, the tail or wings stays on the layer under it and a part moving away
   leaves a dotted copy of its outline. Within 2 px of such a part, a pixel a lower layer owns splits into the part's
   nearest color, at the share the art implies, over that layer's own color (a blur of its pixels farther out).
-- **Lashes in the bangs**: See-Through draws a lash seen through the bangs into the front hair, and face patches lie
-  under the hair, so a closed eye left it there. A front hair pixel within 4 px of an eye's layers that is dark
-  (luminance under 0.4) and 0.2 darker than the hair around it (11 px median), grown by 1 px, is repainted from the
-  art around it by LaMa (with `--lama`; else a blur of the hair's other colors), at rest too: the bangs cover that tip
-  of the lash.
+- **Lashes in the bangs**: See-Through draws a lash seen through the bangs (or drawn over them, as a winged liner)
+  into the front hair, and face patches lie under the hair, so a closed eye left it there. A front hair pixel within
+  4 px of an eye's layers that is dark (luminance under 0.4) and 0.2 darker than the hair around it (the median of
+  its opaque pixels in a 21 px square: an 11 px one was mostly lash where a lash tip ran along the bangs) is a lash
+  when its dark stroke (8-connected, followed 12 px past the eyes) lies over the eyes by 75 % at least; the outline
+  of a strand runs on past them and stays. Those pixels, grown by 1 px, take a blur of the hair's other colors
+  without its dark strokes (LaMa drew the strand's body color, blue on pale tips, down into them). What the art
+  showed there goes to `eyelash.<side>.tip`, right above the hair: opaque on the lash pixels, at least half on the
+  grown pixel, colored so the rest pose stays exactly the same. It is an eyelash layer, so it follows the eye and
+  fades out with the lashes under a face patch, leaving the bangs; LaMa's hidden repaint does not count it as hiding
+  the hair. A piece of the hair under 80 px lying over an eye goes to the nearest lash layer as it is.
 - **Paper between curls**: the matte calls a whole mass of long hair figure, white pockets between its curls too. A
   near-white pocket below the chin, off the image edge, of 20 px or more, that only the hair layers cover (95 % of it,
   no other layer over half), is as white as paper (mean darkest channel over 0.985) and is framed by the hair's ink
@@ -324,10 +341,16 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
 - **Held objects**: an object piece follows a hand only when that arm's sleeve or hand comes within 6 px of it (a
   pendant hanging from the belt by the hand stays with the body). One both hands touch (their hand layers, or their
   sleeves without one) goes with the body (`lower` below the waist, `chest` above) and both arms swing 0.2 of their
-  `Arm`/`Forearm`/`Wrist` turns; otherwise the arm holding an object swings 0.5 of them (what the art hides behind it
-  is a guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them, at most 30° (a
-  cut-out forearm turned further shears into a flat ribbon while it is still fully drawn); the new arm starts as
-  near the old one as its own range allows.
+  `Arm`/`Forearm`/`Wrist` turns and `Shoulder` moves; so do clasped hands (the hand drawn on top hides 15 % or more
+  of the other, whose hidden part is a grey guess); otherwise the arm holding an object swings 0.5 of them (what the
+  art hides behind it is a guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them, at
+  most 30° (a cut-out forearm turned further shears into a flat ribbon while it is still fully drawn); the new arm
+  starts as near the old one as its own range allows.
+- **Arm sway**: every arm's own sway (`Shoulder`, `Arm`, `Forearm`, `Wrist`) is 0.6 of its range (held objects and
+  clasped hands on top of that): what an arm hides of the body is a guess, a flat slab or a ghost of the hand that a
+  wide sway uncovers. Gestures are variants and keep their reach; `Lift` and `Bend` keep theirs.
+- **Hair swing**: the back hair turns at most 10° and 9° per segment at ±1, a lock or braid over the body 12° and
+  14° (they were 14°/12° and 20°/24°): what they hide is a guess, flat with stair-stepped edges.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =

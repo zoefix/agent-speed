@@ -21,10 +21,18 @@ BEND_RANGE = 90.0
 # The arm holding an object swings and its wrist turns this much of the free arm's: what the art hides behind a book,
 # a fan or a purse is a guess, which a wide swing of the object would uncover.
 HELD_SWING = 0.5
-# An object held in both hands: both arms keep to this much, so neither hand leaves it.
+# Every arm's own sway (Shoulder, Arm, Forearm, Wrist) is this much of its range: what an arm hides of the body is a
+# guess that a wide sway uncovers (a flat slab, a ghost of the hand). Gestures are variants and keep their reach.
+ARM_SWING = 0.6
+# An object held in both hands, or hands clasped: both arms (and shoulders) keep to this much, so neither hand leaves
+# it or the other.
 TWO_HANDED_SWING = 0.2
 # Parameters a `swing` hint may not scale: a variant's lead turns the old arm by Lift and Bend toward the new one.
 UNSCALED = ("Lift.", "Bend.", "Var.")
+# Turns of the back hair and of a lock or braid over the body at ±1, in degrees per segment: what they hide is a
+# guess (flat, with stair-stepped edges), so they swing no farther than a lively sway needs (they were 14/12, 20/24).
+HAIR_BACK = (10.0, 9.0)
+HAIR_LOCK = (12.0, 14.0)
 # How far the irises travel at EyeBall ±1, in face widths: a small glance, never sliding off to show the white.
 IRIS_TRAVEL = (0.017, 0.009)
 POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.17, 0.08
@@ -95,7 +103,8 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     for side in ("left", "right"):
         if has(f"shoulder.{side}"):
             params.append(param(f"Shoulder.{side}"))
-            drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw))
+            together = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else 1.0)
+            drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw * together))
         if has(f"eye.{side}"):
             drivers.append(drive(f"EyeOpen.{side}", f"eye.{side}", "scaleY", [(0, -0.9), (1, 0)]))
             drivers.append(linear("EyeBallX", f"iris.{side}", "x", IRIS_TRAVEL[0] * fw))
@@ -104,7 +113,8 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     physics = []
     for side, (upper, lower) in ARM_RANGES.items():
         if has(f"arm.{side}"):
-            held = TWO_HANDED_SWING if lm.get("twoHanded") else HELD_SWING if side == lm.get("objectSide") else 1.0
+            held = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else
+                                HELD_SWING if side == lm.get("objectSide") else 1.0)
             params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}"), param(f"Bend.{side}")]
             drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper * held))
             drivers.append(linear(f"Lift.{side}", f"arm.{side}", "rotate", LIFT_RANGE))
@@ -116,7 +126,8 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
             fist = hand["open"] < FIST
             params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.1 if fist else -0.5, 0.1 if fist else 1.0)]
             params += [param(f"Finger.{side}.{i}", -0.08 if fist else -0.4, 0.12 if fist else 1.0) for i in range(5)]
-            held = TWO_HANDED_SWING if lm.get("twoHanded") else HELD_SWING if side == lm.get("objectSide") else 1.0
+            held = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else
+                                HELD_SWING if side == lm.get("objectSide") else 1.0)
             for d in hand_drivers(side, hand):
                 if d["param"] == f"Wrist.{side}":
                     d["keys"] = [[k, v * held] for k, v in d["keys"]]
@@ -125,15 +136,17 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     if has("hairBack1"):
         bh = lm["backHair"]
         params += [param("HairBack1"), param("HairBack2")]
-        drivers += [linear("HairBack1", "hairBack1", "rotate", -14), linear("HairBack2", "hairBack2", "rotate", -12)]
+        drivers += [linear("HairBack1", "hairBack1", "rotate", -HAIR_BACK[0]),
+                    linear("HairBack2", "hairBack2", "rotate", -HAIR_BACK[1])]
         physics.append(chain("backHair", bh["root"], [bh["mid"][1] - bh["root"][1], bh["end"] - bh["mid"][1]],
-                             ["HairBack1", "HairBack2"], [14, 12], fw, stiffness=30, damping=6.0, wind=0.95))
+                             ["HairBack1", "HairBack2"], list(HAIR_BACK), fw, stiffness=30, damping=6.0, wind=0.95))
     if has("lock1"):
         lk = lm["lock"]
         params += [param("HairLock1"), param("HairLock2")]
-        drivers += [linear("HairLock1", "lock1", "rotate", -20), linear("HairLock2", "lock2", "rotate", -24)]
+        drivers += [linear("HairLock1", "lock1", "rotate", -HAIR_LOCK[0]),
+                    linear("HairLock2", "lock2", "rotate", -HAIR_LOCK[1])]
         physics.append(chain("lock", lk["root"], [lk["mid"][1] - lk["root"][1], lk["end"] - lk["mid"][1]],
-                             ["HairLock1", "HairLock2"], [20, 24], fw, stiffness=20, damping=5.0, wind=1.25))
+                             ["HairLock1", "HairLock2"], list(HAIR_LOCK), fw, stiffness=20, damping=5.0, wind=1.25))
     if has("skirtHem"):
         params += [param("Skirt"), param("SkirtHem")]
         drivers += [linear("Skirt", "skirt", "rotate", -5), linear("SkirtHem", "skirtHem", "rotate", -7)]

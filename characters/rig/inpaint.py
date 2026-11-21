@@ -53,14 +53,17 @@ def lama(image, mask, model_path):
 
 def repaint_hidden(layers, model_path, skip=L.NO_GROWTH):
     """Repaints each layer where the layers above hide it (by more than COVER) with LaMa, from what it shows. Returns
-    the pixels repainted."""
+    the pixels repainted. A lash tip lifted out of the hair does not hide it: the hair under it is already filled."""
     total = 0
     h, w = layers[0].rgba.shape[:2]
     for i, layer in enumerate(layers[:-1]):
         if layer.tag in skip:
             continue
         solid = layer.alpha > 0.5
-        hidden = solid & (L.coverage(layers[i + 1:]) > COVER)
+        above = [other for other in layers[i + 1:] if not other.name.endswith(L.TIP)]
+        if not above:
+            continue
+        hidden = solid & (L.coverage(above) > COVER)
         if hidden.sum() < MIN_PX or (solid & ~hidden).sum() < MIN_PX:
             continue
         ys, xs = np.nonzero(hidden)
