@@ -252,7 +252,7 @@ def main(argv=None):
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     ap.add_argument("--spec", help="the character's spec: its `rig` hints (tail, tailSwing, wings, ears, "
-                                   "staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
+                                   "staticObjects, legsInSkirt, rigidLower, bodyInArms, props, toy)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--lama", help="LaMa inpainting model (big-lama.pt, TorchScript) that repaints what moving parts "
                                    "uncover")
@@ -294,7 +294,7 @@ def main(argv=None):
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
     face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
-    moved = layers.features_off_face(parts, face_box)
+    moved = layers.features_off_face(parts, face_box, toy=bool(hints.get("toy")))
     if moved:
         print(f"eyes or mouths drawn away from the face given to the layer under them: {moved} px")
     parts, moved = layers.tail_off_head(parts, face_box)
@@ -430,7 +430,8 @@ def main(argv=None):
         except patches.Rejected:
             pass
     if on_face.any():
-        print(f"features over an object on the face given to the face: {layers.features_into_face(parts, on_face)} px")
+        given = layers.features_into_face(parts, on_face, toy=bool(hints.get("toy")))
+        print(f"features over an object on the face given to the {'toy' if hints.get('toy') else 'face'}: {given} px")
 
     if args.lama:
         from . import inpaint

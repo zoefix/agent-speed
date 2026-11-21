@@ -482,11 +482,12 @@ def earrings_over_hair(layers, reference, min_px=30, margin=0.02, share=0.6):
     return layers, moved
 
 
-def features_off_face(layers, face_box, margin=0.25, enclosed=0.5):
+def features_off_face(layers, face_box, margin=0.25, enclosed=0.5, toy=False):
     """Gives eyes, brows, a nose or a mouth drawn away from the face (a plush toy's face in her arms) to the layer
     they lie on: See-Through files them with the face's features, which blink, follow the head and fade under face
     patches, so they floated where the toy had been once it moved. A piece of a feature layer (8-connected, alpha
-    over 0.3, grown 2 px over its soft edge) wholly outside the face's box grown by `margin` of its width goes into
+    over 0.3, grown 2 px over its soft edge) wholly outside the face's box grown by `margin` of its width (with the
+    `toy` hint, also one near or over the face whose ring lies on a held object: a toy held up to her cheek) goes into
     the layer drawn below it (not the face's own layers or hair) that holds most of a 2 px ring around it, at least
     `enclosed` of it, when the layers between are clear there; it is composited over that layer, so the rest pose
     stays the same. Returns the pixels moved."""
@@ -503,14 +504,19 @@ def features_off_face(layers, face_box, margin=0.25, enclosed=0.5):
         labels, count = ndimage.label(feature.alpha > 0.3, structure=np.ones((3, 3)))
         for k in range(1, count + 1):
             core = labels == k
-            if (core & near).any():
+            close = bool((core & near).any())
+            if close and not toy:
                 continue
-            piece = ndimage.binary_dilation(core, iterations=2) & (feature.alpha > 0) & ~near
+            piece = ndimage.binary_dilation(core, iterations=2) & (feature.alpha > 0)
+            if not close:
+                piece &= ~near
             ring = ndimage.binary_dilation(piece, iterations=2) & ~piece
             shares = [float((layer.alpha[ring] > 0.5).mean()) for layer in below]
             if max(shares) < enclosed:
                 continue
             target = below[int(np.argmax(shares))]
+            if close and target.tag != "objects":
+                continue
             between = layers[layers.index(target) + 1:layers.index(feature)]
             if between and float(coverage(between)[piece].max()) > 0.05:
                 continue
@@ -520,6 +526,48 @@ def features_off_face(layers, face_box, margin=0.25, enclosed=0.5):
             target.rgba[piece] = np.concatenate([color, total], axis=1)
             feature.rgba[..., 3][piece] = 0.0
             moved += int(piece.sum())
+    if toy:
+        moved += _toy_features(layers, near, enclosed)
+    return moved
+
+
+def _toy_features(layers, near, enclosed):
+    """A toy's eye or mouth near the face is drawn in several feature layers stacked (white, iris, lash), each piece
+    ringed by the others, not by the toy: the features taken together, piece by piece, go to the held object
+    holding `enclosed` of a 2 px ring around them, composited in their order; what layers between (the face's
+    hidden skin under the toy) draw there goes, as the features hid it."""
+    feats = [layer for layer in layers if layer.tag in FACE_TAGS and layer.tag != "face"]
+    objects = [layer for layer in layers if layer.tag == "objects"]
+    if not feats or not objects:
+        return 0
+    drawn = coverage(feats)
+    labels, count = ndimage.label(drawn > 0.3, structure=np.ones((3, 3)))
+    moved = 0
+    for k in range(1, count + 1):
+        core = labels == k
+        if not (core & near).any():
+            continue
+        piece = ndimage.binary_dilation(core, iterations=2) & (drawn > 0)
+        ring = ndimage.binary_dilation(piece, iterations=2) & ~piece
+        shares = [float((obj.alpha[ring] > 0.5).mean()) for obj in objects]
+        if max(shares) < enclosed:
+            continue
+        target = objects[int(np.argmax(shares))]
+        at = layers.index(target)
+        mine = [f for f in feats if (f.alpha[piece] > 0).any()]
+        if any(layers.index(f) < at for f in mine):
+            continue
+        top = max(layers.index(f) for f in mine)
+        for layer in layers[at + 1:top]:
+            if layer not in mine:
+                layer.rgba[..., 3][piece] = 0.0
+        for f in sorted(mine, key=layers.index):
+            a, t = f.alpha[piece][:, None], target.alpha[piece][:, None]
+            total = a + t * (1 - a)
+            color = (f.rgba[piece][:, :3] * a + target.rgba[piece][:, :3] * t * (1 - a)) / np.maximum(total, 1e-6)
+            target.rgba[piece] = np.concatenate([color, total], axis=1)
+            f.rgba[..., 3][piece] = 0.0
+        moved += int(piece.sum())
     return moved
 
 
@@ -541,11 +589,12 @@ def objects_over_face(layers, min_px=30):
     return out
 
 
-def features_into_face(layers, keep, reach=1):
+def features_into_face(layers, keep, reach=1, toy=False):
     """Gives the face layer what the features (eyes, brows, nose, mouth) draw where the art shows an object over the
     face (`keep`, from objects_over_face, grown by `reach` px): See-Through often paints a flute's lip plate into the
-    mouth, and a face patch fades the features out but leaves the face as it is there. The rest pose stays the same.
-    Returns the pixels moved."""
+    mouth, and a face patch fades the features out but leaves the face as it is there. With the `toy` hint they are
+    the toy's own eyes and mouth: they go, with the face under them, into the object drawn there most, so they stay
+    on the toy when the head turns. The rest pose stays the same. Returns the pixels moved."""
     face = next((layer for layer in layers if layer.tag == "face"), None)
     if face is None or not keep.any():
         return 0
@@ -556,8 +605,18 @@ def features_into_face(layers, keep, reach=1):
         return 0
     ys, xs = np.nonzero(area)
     box = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
-    color, cover = _over([face] + features, box)
     here = area[box]
+    objects = [layer for layer in layers[:layers.index(face)] if layer.tag == "objects"]
+    if toy and objects:
+        target = max(objects, key=lambda o: float((o.alpha[box][here] > 0.5).sum()))
+        between = [layer for layer in layers[layers.index(target):layers.index(face)]]
+        color, cover = _over(between + [face] + features, box)
+        straight = color / np.maximum(cover, 1e-6)[..., None]
+        target.rgba[box][here] = np.concatenate([straight, cover[..., None]], axis=-1)[here]
+        for layer in between[1:] + [face] + features:
+            layer.rgba[box][..., 3][here] = 0.0
+        return int(here.sum())
+    color, cover = _over([face] + features, box)
     straight = color / np.maximum(cover, 1e-6)[..., None]
     face.rgba[box][here] = np.concatenate([straight, cover[..., None]], axis=-1)[here]
     for layer in features:

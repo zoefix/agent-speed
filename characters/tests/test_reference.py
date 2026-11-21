@@ -1291,6 +1291,19 @@ class TailCopyTests(unittest.TestCase):
         np.testing.assert_allclose(toy.rgba[155, 85, :3], 0.1)
         np.testing.assert_allclose(composite(parts), before, atol=1e-5)
 
+    def test_with_the_toy_hint_eyes_of_a_toy_held_up_to_the_cheek_go_to_the_toy_but_hers_stay(self):
+        from characters.rig.layers import composite, features_off_face
+        toy = self.layer("objects", (0.5, 0.3, 0.2), (70, 120, 122, 170))
+        face = self.layer("face", (0.95, 0.85, 0.8), (20, 80, 60, 120))
+        eyes = self.layer("eyewhite", (0.1, 0.1, 0.1), (40, 50, 70, 80), (85, 90, 126, 131))
+        parts = [toy, face, eyes]
+        before = composite(parts)
+        self.assertEqual(features_off_face(parts, (60, 20, 120, 80)), 0)
+        self.assertGreater(features_off_face(parts, (60, 20, 120, 80), toy=True), 0)
+        self.assertEqual(eyes.alpha[87, 128], 0.0)
+        self.assertEqual(eyes.alpha[45, 75], 1.0)
+        np.testing.assert_allclose(composite(parts), before, atol=1e-5)
+
     def test_a_layer_grows_far_only_under_still_parts(self):
         from characters.rig.layers import grow_underlays
         torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 100))

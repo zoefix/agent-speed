@@ -139,7 +139,9 @@ swings less far, so less of what the art never drew shows),
 that does not move with the hand, such as a desk; a gesture on its side swaps the arm alone and leaves the object the
 base's), `swing` (parameter id prefixes to factors on their drivers, such as `{"Arm.right": 0.35}`: a part whose
 hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay), `poseSwing` (the same per pose,
-over `swing`) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs
+over `swing`), `toy` (a held toy with a face of its own: its eyes and mouth go to the toy even where it is held up to
+her face, all of a stacked eye at once, instead of to her face's layers, which follow the head and fade under face
+patches) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs
 and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
 is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice;
 the hint also suits long-skirted art whose boots peek out under a hem that barely covers their tops, which would
