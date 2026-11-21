@@ -4658,6 +4658,22 @@
       ]
     },
     {
+      "id": "neon-xhigh",
+      "model": "gemini-4-neon-xhigh",
+      "expected": [
+        "gemini-4-neon",
+        "xhigh"
+      ]
+    },
+    {
+      "id": "xhigh-is-not-high",
+      "model": "gemini-4-hydrogen-xhigh",
+      "expected": [
+        "gemini-4-hydrogen",
+        "xhigh"
+      ]
+    },
+    {
       "id": "no-suffix",
       "model": "gemini-3.1-pro",
       "expected": null
@@ -4691,6 +4707,16 @@
       "id": "label-max",
       "label": "Claude Opus 5.5 (Max)",
       "expected": "Max"
+    },
+    {
+      "id": "label-extra-is-xhigh",
+      "label": "Gemini 4 Hydrogen (Extra)",
+      "expected": "xhigh"
+    },
+    {
+      "id": "label-extra-case-matters",
+      "label": "Gemini 4 Neon (extra)",
+      "expected": null
     },
     {
       "id": "label-without-effort",

@@ -3,8 +3,10 @@ import Foundation
 /// A response's reasoning effort and speed (EXECUTION-MODES, Antigravity): effort is mostly a model variant, so only
 /// exact catalog suffixes and display names count, and only for the model that actually answered.
 enum AntigravityEffort {
-    private static let modelSuffixes = ["-extra-low", "-low", "-medium", "-high", "-max"]
-    private static let labelWords = ["Low", "Medium", "High", "Max"]
+    private static let modelSuffixes = ["-extra-low", "-xhigh", "-low", "-medium", "-high", "-max"]
+    private static let labelWords = ["Low", "Medium", "High", "Max", "Extra"]
+    /// The model selector's names that are not the effort token (the CLI's `xhigh` is `Extra` in the selector).
+    private static let labelTokens = ["Extra": "xhigh"]
     private static let servedVariantSuffix = "-exp-b"
     private static let thinkingLevels: [Int64: String] = [1: "low", 2: "medium", 3: "high"]
 
@@ -16,12 +18,13 @@ enum AntigravityEffort {
         return nil
     }
 
-    /// The effort word of a display name such as `Gemini 3.1 Pro (High)`.
+    /// The effort word of a display name such as `Gemini 3.1 Pro (High)` (`Extra` as `xhigh`).
     static func word(ofLabel label: String) -> String? {
-        labelWords.first { word in
+        let word = labelWords.first { word in
             let suffix = " (\(word))"
             return label.hasSuffix(suffix) && label.utf8.count > suffix.utf8.count
         }
+        return word.map { labelTokens[$0] ?? $0 }
     }
 
     /// The token of `completion_config_override.thinking_level`.

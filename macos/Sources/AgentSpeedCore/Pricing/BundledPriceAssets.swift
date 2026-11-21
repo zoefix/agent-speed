@@ -7,7 +7,7 @@ enum BundledPriceAssets {
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 10,
+  "version": 11,
   "updated": "2026-11-21",
   "currency": "USD",
   "unit": "perMillionTokens",
@@ -157,6 +157,7 @@ enum BundledPriceAssets {
           "-low",
           "-medium",
           "-high",
+          "-xhigh",
           "-tiered"
         ]
       },
@@ -1910,6 +1911,7 @@ enum BundledPriceAssets {
         "gemini 4 neon (low)",
         "gemini 4 neon (medium)",
         "gemini 4 neon (high)",
+        "gemini 4 neon (extra)",
         "gemini 4 neon"
       ],
       "source": "https://aistudio.google.com/docs/pricing",
@@ -1930,6 +1932,7 @@ enum BundledPriceAssets {
         "gemini 4 hydrogen (low)",
         "gemini 4 hydrogen (medium)",
         "gemini 4 hydrogen (high)",
+        "gemini 4 hydrogen (extra)",
         "gemini 4 hydrogen"
       ],
       "source": "https://aistudio.google.com/docs/pricing",
@@ -5158,6 +5161,14 @@ enum BundledPriceAssets {
     {
       "model": "gemini-4-carbon-high",
       "expect": "gemini-4-carbon"
+    },
+    {
+      "model": "gemini-4-neon-xhigh",
+      "expect": "gemini-4-neon"
+    },
+    {
+      "model": "Gemini 4 Hydrogen (Extra)",
+      "expect": "gemini-4-hydrogen"
     },
     {
       "model": "mimo-v2.6-pro",

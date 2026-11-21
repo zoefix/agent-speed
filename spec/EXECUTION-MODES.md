@@ -280,11 +280,12 @@ facts, and one that names no effort has no effort facts.
   `session_title` or `goal_completion_verification`. No row is served evidence: nothing in ZCode echoes a tier.
 - **Antigravity** (per database, METRICS 4.8): effort is mostly a model variant, not a field. A response's effort,
   from the first of:
-  1. its generation's `model_display_name`, when it ends in exactly ` (Low)`, ` (Medium)`, ` (High)` or ` (Max)`
-     after a non-empty name (evidence `recorded`, scope `request`; the word, lower-cased by the adapter);
-  2. the `model_name` of its executor (the covering row of 4.8 *Metadata*) with an exact suffix `-extra-low`, `-low`,
-     `-medium`, `-high` or `-max`, tried in that order (evidence `recorded`, scope `turn`; `extra-low` is a word
-     without a meter level);
+  1. its generation's `model_display_name`, when it ends in exactly ` (Low)`, ` (Medium)`, ` (High)`, ` (Max)` or
+     ` (Extra)` after a non-empty name (evidence `recorded`, scope `request`; the word, lower-cased by the adapter,
+     except `Extra`, the selector's name for `xhigh` on Gemini 4 Neon and Hydrogen, which is `xhigh`);
+  2. the `model_name` of its executor (the covering row of 4.8 *Metadata*) with an exact suffix `-extra-low`,
+     `-xhigh`, `-low`, `-medium`, `-high` or `-max`, tried in that order (evidence `recorded`, scope `turn`;
+     `extra-low` is a word without a meter level);
   3. that executor's `completion_config_override.thinking_level` (`1` `low`, `2` `medium`, `3` `high`, others no fact),
      the API-key path where a model has no variants (evidence `recorded`, scope `turn`).
 

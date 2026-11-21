@@ -123,9 +123,10 @@ public static class ExecutionModeNative
     /// <summary>The exact <c>(Low)</c>, <c>(Medium)</c>, <c>(High)</c> or <c>(Max)</c> end of a display name after a non-empty name.</summary>
     public static string? AntigravityLabelEffort(string label)
     {
-        foreach (var word in (ReadOnlySpan<string>)["Low", "Medium", "High", "Max"])
+        foreach (var word in (ReadOnlySpan<string>)["Low", "Medium", "High", "Max", "Extra"])
         {
-            if (label.Length > word.Length + 3 && label.EndsWith($" ({word})", StringComparison.Ordinal)) return word;
+            // The model selector's Extra is the CLI's xhigh.
+            if (label.Length > word.Length + 3 && label.EndsWith($" ({word})", StringComparison.Ordinal)) return word == "Extra" ? "xhigh" : word;
         }
 
         return null;
@@ -134,7 +135,7 @@ public static class ExecutionModeNative
     /// <summary>The base model and effort token of a catalog id that ends in exactly one effort suffix, else null.</summary>
     public static (string Base, string Effort)? AntigravityModelEffort(string model)
     {
-        foreach (var suffix in (ReadOnlySpan<string>)["-extra-low", "-low", "-medium", "-high", "-max"])
+        foreach (var suffix in (ReadOnlySpan<string>)["-extra-low", "-xhigh", "-low", "-medium", "-high", "-max"])
         {
             if (model.Length > suffix.Length && model.EndsWith(suffix, StringComparison.Ordinal)) return (model[..^suffix.Length], suffix[1..]);
         }

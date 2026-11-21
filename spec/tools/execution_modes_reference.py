@@ -55,8 +55,10 @@ HERMES_TIERS = {"fast": "fast", "priority": "fast", "ultrafast": "ultrafast", "u
 OMP_FAMILIES = {"anthropic": "anthropic", "openai": "openai", "openai-codex": "openai", "azure": "openai",
                 "azure-openai-responses": "openai", "google": "google", "google-gemini-cli": "google",
                 "google-antigravity": "google", "google-vertex": "google"}
-AG_EFFORT_SUFFIXES = ("-extra-low", "-low", "-medium", "-high", "-max")
-AG_LABEL = re.compile(r".+ \((Low|Medium|High|Max)\)", re.S)
+AG_EFFORT_SUFFIXES = ("-extra-low", "-xhigh", "-low", "-medium", "-high", "-max")
+AG_LABEL = re.compile(r".+ \((Low|Medium|High|Max|Extra)\)", re.S)
+# The model selector's names that are not the effort token (the CLI's `xhigh` is `Extra` in the selector).
+AG_LABEL_TOKENS = {"Extra": "xhigh"}
 
 
 def identifier(value, limit=64):
@@ -199,9 +201,9 @@ def antigravity_model_effort(model):
 
 
 def antigravity_label_effort(label):
-    """The effort word of a display name such as `Gemini 3.1 Pro (High)`, else None."""
+    """The effort word of a display name such as `Gemini 3.1 Pro (High)` (`Extra` as `xhigh`), else None."""
     match = AG_LABEL.fullmatch(label)
-    return match.group(1) if match else None
+    return AG_LABEL_TOKENS.get(match.group(1), match.group(1)) if match else None
 
 
 def effort_display(value):

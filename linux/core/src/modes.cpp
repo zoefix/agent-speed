@@ -320,7 +320,7 @@ ExecutionModes hermesServiceTier(const std::optional<std::string>& raw, ModeEvid
 }
 
 std::optional<std::pair<std::string, std::string>> antigravityModelEffort(std::string_view model) {
-    for (std::string_view suffix : {"-extra-low", "-low", "-medium", "-high", "-max"}) {
+    for (std::string_view suffix : {"-extra-low", "-xhigh", "-low", "-medium", "-high", "-max"}) {
         if (model.size() > suffix.size() && model.substr(model.size() - suffix.size()) == suffix) {
             return std::pair{std::string(model.substr(0, model.size() - suffix.size())), std::string(suffix.substr(1))};
         }
@@ -329,9 +329,12 @@ std::optional<std::pair<std::string, std::string>> antigravityModelEffort(std::s
 }
 
 std::optional<std::string> antigravityLabelEffort(std::string_view label) {
-    for (std::string_view word : {"Low", "Medium", "High", "Max"}) {
+    for (std::string_view word : {"Low", "Medium", "High", "Max", "Extra"}) {
         const std::string tail = " (" + std::string(word) + ")";
-        if (label.size() > tail.size() && label.substr(label.size() - tail.size()) == tail) return std::string(word);
+        // The model selector's Extra is the CLI's xhigh.
+        if (label.size() > tail.size() && label.substr(label.size() - tail.size()) == tail) {
+            return word == "Extra" ? std::string("xhigh") : std::string(word);
+        }
     }
     return std::nullopt;
 }
