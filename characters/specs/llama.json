@@ -41,6 +41,7 @@
   ]
  },
  "rig": {
-  "ears": true
+  "ears": true,
+    "tail": true
  }
 }

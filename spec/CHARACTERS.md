@@ -288,6 +288,12 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   arm's when the face's own paint there is off the art (median mean channel difference over 0.06, 5 px box) and the
   arm's is no further off by 0.05; that arm is drawn right above the face's features, below the bangs, and keeps none
   of the face's other pixels.
+- **Features away from the face**: See-Through files eyes, brows, a nose or a mouth drawn away from the face (a plush
+  toy's face in her arms) with the face's features, which blink, follow the head and fade under face patches, so
+  they floated where the toy had been once it moved. A piece of a feature layer (8-connected, alpha over 0.3, grown
+  2 px over its soft edge) wholly outside the face's box grown by a quarter of its width goes into the layer drawn
+  below it (not the face's own layers or hair) that holds most of a 2 px ring around it (at least half), when the
+  layers between are clear there, composited over it (the rest pose stays the same).
 - **Objects over the face**: a held object is never behind the face, so where one overlaps the face's layers (pieces
   of 30 px or more: a flute's lip plate at the lips, which See-Through often paints into the face too) the face keeps
   what the art shows and no face patch replaces it (each region leaves it out, grown by 1 px), so an edit that left
@@ -372,7 +378,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   paint is as near the art as the hair's (median mean channel difference, within 0.02) on pieces holding 60 % of its
   overlap with the front hair (30 px or more), it is drawn right above the front hair and keeps none of the other
   pieces, where the art shows the hair; the copy in the hair is then hidden and repainted.
-- **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
+- **Tail**: only a character whose spec has the `tail` hint has one; otherwise a layer See-Through tags as the tail
+  (a plush toy in her arms) is an object and follows the hands that hold it. The root is the tail pixel touching
+  another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =
   smoothstep(0.58, 0.75, u)`, `tail2 = smoothstep(0.25, 0.42, u) · (1 − tail3)`, the rest `tail1`, which hands over

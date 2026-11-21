@@ -482,6 +482,47 @@ def earrings_over_hair(layers, reference, min_px=30, margin=0.02, share=0.6):
     return layers, moved
 
 
+def features_off_face(layers, face_box, margin=0.25, enclosed=0.5):
+    """Gives eyes, brows, a nose or a mouth drawn away from the face (a plush toy's face in her arms) to the layer
+    they lie on: See-Through files them with the face's features, which blink, follow the head and fade under face
+    patches, so they floated where the toy had been once it moved. A piece of a feature layer (8-connected, alpha
+    over 0.3, grown 2 px over its soft edge) wholly outside the face's box grown by `margin` of its width goes into
+    the layer drawn below it (not the face's own layers or hair) that holds most of a 2 px ring around it, at least
+    `enclosed` of it, when the layers between are clear there; it is composited over that layer, so the rest pose
+    stays the same. Returns the pixels moved."""
+    x0, y0, x1, y1 = face_box
+    m = margin * (x1 - x0)
+    near = np.zeros(layers[0].alpha.shape, bool)
+    near[max(0, int(y0 - m)):int(y1 + m) + 1, max(0, int(x0 - m)):int(x1 + m) + 1] = True
+    moved = 0
+    for feature in [layer for layer in layers if layer.tag in FACE_TAGS and layer.tag != "face"]:
+        below = [layer for layer in layers[:layers.index(feature)]
+                 if layer.tag not in FACE_TAGS + ("front hair", "back hair")]
+        if not below:
+            continue
+        labels, count = ndimage.label(feature.alpha > 0.3, structure=np.ones((3, 3)))
+        for k in range(1, count + 1):
+            core = labels == k
+            if (core & near).any():
+                continue
+            piece = ndimage.binary_dilation(core, iterations=2) & (feature.alpha > 0) & ~near
+            ring = ndimage.binary_dilation(piece, iterations=2) & ~piece
+            shares = [float((layer.alpha[ring] > 0.5).mean()) for layer in below]
+            if max(shares) < enclosed:
+                continue
+            target = below[int(np.argmax(shares))]
+            between = layers[layers.index(target) + 1:layers.index(feature)]
+            if between and float(coverage(between)[piece].max()) > 0.05:
+                continue
+            a, t = feature.alpha[piece][:, None], target.alpha[piece][:, None]
+            total = a + t * (1 - a)
+            color = (feature.rgba[piece][:, :3] * a + target.rgba[piece][:, :3] * t * (1 - a)) / np.maximum(total, 1e-6)
+            target.rgba[piece] = np.concatenate([color, total], axis=1)
+            feature.rgba[..., 3][piece] = 0.0
+            moved += int(piece.sum())
+    return moved
+
+
 def objects_over_face(layers, min_px=30):
     """Where a held object overlaps the face (a flute's lip plate at the lips; See-Through often paints it into the
     face layer as well): an object is never behind the face, so the face keeps what the art shows there and face

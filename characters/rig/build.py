@@ -236,6 +236,13 @@ def main(argv=None):
     hints = character.get("rig", {})
 
     size, parts = layers.load_psd(args.psd)
+    if not hints.get("tail"):
+        # A character without the `tail` hint has no tail: See-Through's guess of one (a plush toy in her arms) is
+        # an object, which follows the hands that hold it instead of swishing.
+        for p in parts:
+            if p.tag == "tail":
+                p.tag = "objects"
+                print(f"{p.name}: no tail hint, rigged as an object")
     reference = layers.load_reference(args.reference, size)
     points, follow = prop_hint(hints, args.band)
     if points and args.sam:
@@ -255,6 +262,9 @@ def main(argv=None):
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
     face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
+    moved = layers.features_off_face(parts, face_box)
+    if moved:
+        print(f"eyes or mouths drawn away from the face given to the layer under them: {moved} px")
     parts, moved = layers.tail_off_head(parts, face_box)
     if moved:
         print(f"tail on the hat given to the hat: {moved} px")
