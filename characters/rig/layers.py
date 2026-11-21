@@ -718,7 +718,7 @@ def wings_alone(layers, reach=6, island=0.05, enclosed=0.6):
 BODY_TAGS = ("neck", "topwear", "neckwear", "bottomwear", "legwear", "footwear")
 
 
-def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6, moving_reach=40):
+def back_hair_alone(layers, reach=10, cover=0.995, island=0.05, enclosed=0.6, moving_reach=20):
     """Leaves the back hair only near where it shows: See-Through paints a whole sheet of it behind the body (flat,
     with the gaps between curls drawn as outlines), and LaMa repaints it flat; once the hair swings out past the body
     that sheet shows as a slab. Back hair the body's clothes (`BODY_TAGS`) cover by `cover`, more than `reach` px from

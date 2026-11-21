@@ -68,20 +68,15 @@ def add_appendages(parts, lm, bones, hints):
     return tail_lm, wing_lm, ear_lm, spine
 
 
-def split_hands(parts, found, reference, sam, own=0.5):
+def split_hands(parts, found, reference, sam):
     """Cuts each detected hand out of its arm layer into its own part, drawn right above the arm. With a SAM
-    checkpoint the cut follows the drawn outline of the hand. A hand whose own arm layer draws under `own` of SAM's
-    mask is drawn by another layer (the split gave it to the other sleeve): it stays where it is, since clearing it
-    from that layer and cutting it from its own arm would leave a smear where the hand was."""
+    checkpoint the cut follows the drawn outline of the hand, taken from the art, so a hand the split gave to another
+    layer (the other sleeve, holding a book across the body) is whole all the same and that layer gives it up."""
     masks = {}
     if sam:
         from . import segment
         for side, hand in found.items():
             mask = segment.hand_mask(reference, hand, sam)
-            arm = next((p for p in parts if p.tag == "handwear" and p.side == side), None)
-            if mask is not None and (arm is None or float((arm.alpha[mask] > 0.5).mean()) < own):
-                print(f"hand {side}: its arm layer draws little of it, the hand stays where it is drawn")
-                continue
             if mask is not None:
                 masks[side] = mask
                 cleared = hands.clear_ghosts(parts, mask & hands.past_cut(mask.shape, hand), keep=f"handwear.{side}")
@@ -99,6 +94,11 @@ def split_hands(parts, found, reference, sam, own=0.5):
         holds = mask is None or any((ndimage.binary_dilation(p.alpha > 0.3, iterations=6) & mask).any()
                                     for p in parts if p.tag == "objects")
         out += list(hands.split(layer, hand, mask, reference, holds=holds))
+    for side, mask in masks.items():
+        part = next((p for p in out if p.tag == "hand" and p.side == side), None)
+        moved = hands.bits_in_hair(out, part, mask) if part is not None else 0
+        if moved:
+            print(f"hand {side}: {moved} px of it the front hair drew moved to the hand")
     return out, found
 
 
@@ -146,6 +146,20 @@ def hands_at_face(parts, min_px=30):
     face = layers.coverage([p for p in parts if p.tag in HEAD_HELD]) > 0.5
     return sorted({p.side for p in parts if p.tag == "hand" and p.side in ("left", "right")
                    and int(((p.alpha > 0.5) & face).sum()) >= min_px})
+
+
+def hands_on_body(parts, share=0.7):
+    """Sides whose hand lies over the other layers (the body, the clothes, an object, the hair) by `share` of it: what
+    it hides there is a guess, a smear or the old hand's outline once the hand sways off."""
+    arms = ("hand", "handwear")
+    under = layers.coverage([p for p in parts if p.tag not in arms]) > 0.5
+    out = []
+    for p in parts:
+        if p.tag == "hand" and p.side in ("left", "right"):
+            hand = p.alpha > 0.5
+            if hand.any() and float((hand & under).sum() / hand.sum()) >= share:
+                out.append(p.side)
+    return sorted(set(out))
 
 
 def lock_on_body(parts, lm):
@@ -389,11 +403,14 @@ def main(argv=None):
         lm["twoHanded"] = True
         print("hands clasped: both arms keep together")
     lm["faceHands"] = hands_at_face(parts)
+    lm["bodyHands"] = [side for side in hands_on_body(parts) if side not in lm["faceHands"]]
     if "lock" in lm:
         lm["lockOnBody"] = lock_on_body(parts, lm)
         print(f"lock on the body: {lm['lockOnBody']:.2f} of it")
     if lm["faceHands"]:
         print(f"hands on the face keep still: {', '.join(lm['faceHands'])}")
+    if lm["bodyHands"]:
+        print(f"hands on the body sway less: {', '.join(lm['bodyHands'])}")
     if playing:
         # An instrument at the lips: the mouth stays as drawn under every face patch; only eyes and brows change.
         try:
@@ -454,6 +471,8 @@ def main(argv=None):
     bone_index = {b.name: i for i, b in enumerate(bones)}
 
     meshes, report = [], []
+    body = layers.coverage([p for p in parts if p.tag in layers.BODY_TAGS + ("handwear", "hand")]) > 0.5
+    outside = ndimage.distance_transform_edt(~body) if body.any() else None
     for order, (layer, v) in enumerate(ordered_parts(parts, loaded)):
         built = mesh.build_mesh(layer.alpha, layer.tag)
         if built is None:
@@ -477,6 +496,8 @@ def main(argv=None):
         else:
             attach = object_attach.get(layer.name.split("@")[0]) if layer.tag == "objects" else None
             influences = skeleton.weights_for(layer, vertices, lm, attach)
+            if layer.tag == "back hair" and "backHair" in lm and outside is not None:
+                influences = skeleton.back_hair_on_body(influences, vertices, outside, lm)
         influences = [(b, w) for b, w in influences if b in bone_index]
         bone_idx, weights = skeleton.pack_weights(influences, bone_index)
         gaps = mesh.uncovered_pixels(layer.alpha, vertices, triangles)

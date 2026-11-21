@@ -33,8 +33,11 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   the wrist without dragging the book or the dress along. The cut closes creases up to 4 px wide between curled
   fingers and takes in white pinholes the hand encloses (up to a tenth of its size squared), which otherwise stayed
   on the arm or showed the stage through a turning fist. Only a hand an object layer touches (within 6 px) leaves
-  out what it encloses as a held object: the dark hollow of an empty fist is the hand's. A hand whose own arm layer
-  draws under half of SAM's mask (the split gave it to the other sleeve) stays where it is drawn, uncut.
+  out what it encloses as a held object: the dark hollow of an empty fist is the hand's. The hand is taken from the
+  art, so one the split gave to the other sleeve (a hand holding a book across the body) is whole all the same; that
+  sleeve gives it up, turning clear where it is drawn above the hand and repainted where below. Knuckles the
+  front hair drew between strands crossing the hand (within 8 px of the mask, nearer the hand's hue than the hair's)
+  go to the hand, so a gesture replacing it does not leave them in the hair.
 - `reference/stage.py` films the character style: the character alone on the desktop with the speed, its title, the
   model and the agents orbiting her on Kepler orbits (in front of her and behind her), a ring of lights at her feet as the gauge, and one illustration per speed
   band swapped while she turns edge-on.

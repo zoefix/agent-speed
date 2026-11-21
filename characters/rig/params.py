@@ -25,11 +25,14 @@ HELD_SWING = 0.5
 # guess that a wide sway uncovers (a flat slab, a ghost of the hand). Gestures are variants and keep their reach.
 ARM_SWING = 0.4
 # An object held in both hands, or hands clasped: both arms (and shoulders) keep to this much, so neither hand leaves
-# it or the other.
-TWO_HANDED_SWING = 0.2
+# it or the other, nor a piece of the object the split left on an arm slides off it (a second flute).
+TWO_HANDED_SWING = 0.05
 # A hand on the face (a finger at the chin, a fist rubbing an eye): its arm keeps to this much, so the hand stays on
 # the face instead of uncovering a guess of it (a smear on the neck, a torn jaw).
 FACE_HAND_SWING = 0.05
+# A hand lying on the body, the clothes or an object (rather than out over the stage): its arm keeps to this much, as
+# what the hand hides there is a guess too (a dark smear on the chest, the old hand's outline on a book).
+BODY_HAND_SWING = 0.25
 # Parameters a `swing` hint may not scale: a variant's lead turns the old arm by Lift and Bend toward the new one.
 UNSCALED = ("Lift.", "Bend.", "Var.")
 # Turns of the back hair and of a lock or braid at ±1, in degrees per segment: what they hide is a guess, so they
@@ -61,11 +64,13 @@ def linear(pid, bone, channel, amount):
 
 def arm_share(lm, side):
     """How much of its range an arm's own sway covers: ARM_SWING, less for both hands on one object or clasped, a hand
-    on the face, or the hand holding an object."""
+    on the face, a hand lying on the body, or the hand holding an object."""
     if lm.get("twoHanded"):
         return ARM_SWING * TWO_HANDED_SWING
     if side in lm.get("faceHands", ()):
         return ARM_SWING * FACE_HAND_SWING
+    if side in lm.get("bodyHands", ()):
+        return ARM_SWING * BODY_HAND_SWING
     return ARM_SWING * (HELD_SWING if side == lm.get("objectSide") else 1.0)
 
 
@@ -122,7 +127,8 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     for side in ("left", "right"):
         if has(f"shoulder.{side}"):
             params.append(param(f"Shoulder.{side}"))
-            together = arm_share(lm, side) if lm.get("twoHanded") or side in lm.get("faceHands", ()) else ARM_SWING
+            still = lm.get("twoHanded") or side in lm.get("faceHands", ()) or side in lm.get("bodyHands", ())
+            together = arm_share(lm, side) if still else ARM_SWING
             drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw * together))
         if has(f"eye.{side}"):
             drivers.append(drive(f"EyeOpen.{side}", f"eye.{side}", "scaleY", [(0, -0.9), (1, 0)]))

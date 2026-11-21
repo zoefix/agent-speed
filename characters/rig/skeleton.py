@@ -302,6 +302,27 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
     return [("lower", one)]
 
 
+HAIR_ON_BODY = 0.6
+
+
+def back_hair_on_body(influences, vertices, outside, lm, reach=None):
+    """Back hair weights with the hair near the body's outline held by the body: `outside` is each pixel's distance
+    outside the body's and arms' layers (0 over them; an arm sways little). The swing bones' share fades in over
+    `reach` (HAIR_ON_BODY face widths) from the outline, the chest (the hips below the waist) holding the rest, so the
+    hair beside the body never parts from it nor swings out what the body hides of it (a darker guessed panel, a
+    sliver of the stage); the curls farther out swing fully."""
+    reach = reach or HAIR_ON_BODY * lm["faceWidth"]
+    h, w = outside.shape
+    x = np.clip(np.round(vertices[:, 0]).astype(int), 0, w - 1)
+    y = np.clip(np.round(vertices[:, 1]).astype(int), 0, h - 1)
+    held = 1 - smoothstep(0.0, reach, outside[y, x])
+    fx0, fy0, fx1, fy1 = lm["face"]
+    low = _below_waist(vertices[:, 1], lm, fy1 - fy0)
+    swing = sum(wt for bone, wt in influences if bone.startswith("hairBack"))
+    out = [(bone, wt * (1 - held) if bone.startswith("hairBack") else wt) for bone, wt in influences]
+    return out + [("chest", swing * held * (1 - low)), ("lower", swing * held * low)]
+
+
 def _arm_layer_weights(vertices, lm, side, arm, suffix):
     x, y = vertices[:, 0], vertices[:, 1]
     key = side or "single"

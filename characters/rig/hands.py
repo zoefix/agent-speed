@@ -149,11 +149,15 @@ def split(layer, hand, mask=None, reference=None, holds=True):
     return Layer(layer.name, layer.tag, arm, layer.side), Layer(f"hand.{hand['side']}", "hand", part, hand["side"])
 
 
+def _chroma(rgb):
+    rgb = np.asarray(rgb, np.float32)
+    return np.stack([rgb[..., 0] - rgb[..., 1], 0.5 * (rgb[..., 0] + rgb[..., 1]) - rgb[..., 2]], axis=-1)
+
+
 def off_hue(rgb, where, hand_mask, far=0.1):
     """Pixels of `where` whose hue (red-green, yellow-blue) is far from the hand's median over `hand_mask`. Hue alone,
     so shading on the skin never counts and a glove the color of the object keeps everything."""
-    rgb = np.asarray(rgb, np.float32)
-    chroma = np.stack([rgb[..., 0] - rgb[..., 1], 0.5 * (rgb[..., 0] + rgb[..., 1]) - rgb[..., 2]], axis=-1)
+    chroma = _chroma(rgb)
     if not hand_mask.any():
         return np.zeros(where.shape, bool)
     return where & (np.linalg.norm(chroma - np.median(chroma[hand_mask], axis=0), axis=-1) > far)
@@ -173,12 +177,14 @@ def held(candidates, size, share=0.03):
 
 def clear_ghosts(parts, mask, keep):
     """Other layers that took the hand's colors at reprojection give them up: a layer drawn above the hand (hair the
-    hand was in front of) turns transparent there, a layer below gets the hand inpainted away, so a moving finger
-    never leaves a copy of itself behind and nothing covers it."""
+    hand was in front of, the other sleeve drawn over this arm) turns transparent there, a layer below gets the hand
+    inpainted away, so a moving finger never leaves a copy of itself behind and nothing covers it. The hand is drawn
+    right above its arm `keep`, so that decides which layers lie above it (by tag without one)."""
     import cv2
     from .layers import DRAW_ORDER, owner_map
     owner = owner_map(parts)
     above = {tag for tag in DRAW_ORDER[DRAW_ORDER.index("hand") + 1:]}
+    arm = next((i for i, layer in enumerate(parts) if layer.name == keep), None)
     ys, xs = np.nonzero(mask)
     if len(ys) == 0:
         return 0
@@ -191,7 +197,7 @@ def clear_ghosts(parts, mask, keep):
         ghost = (mask & (owner == i))[y0:y1, x0:x1]
         if not ghost.any():
             continue
-        if layer.tag in above:
+        if (i > arm) if arm is not None else layer.tag in above:
             layer.rgba[y0:y1, x0:x1, 3] = np.where(ghost, 0.0, layer.rgba[y0:y1, x0:x1, 3])
             cleared += int(ghost.sum())
             continue
@@ -201,6 +207,68 @@ def clear_ghosts(parts, mask, keep):
                                                  layer.rgba[y0:y1, x0:x1, :3])
         cleared += int(ghost.sum())
     return cleared
+
+
+INK = 0.45
+
+
+def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2):
+    """Bits of the hand that the front hair took (knuckles seen between strands crossing the hand): front hair pixels
+    within `reach` px of the hand's mask whose hue is nearer the hand's than the hair's around them (and within `far`
+    of the hand's, as off_hue), and their dark outline next to them (under INK luminance, nearer the hand's ink than
+    the hair's), in pieces under `piece` of the mask's area, go to the hand part, composited as they showed. Layers
+    between the two give those pixels up where the hair hid them at rest. A gesture replacing the hand then takes them
+    along instead of leaving them in the hair, and a sway carries them. Returns the pixels moved."""
+    i_hand = next((i for i, p in enumerate(parts) if p is hand), None)
+    if i_hand is None or not mask.any():
+        return 0
+    near = ndimage.binary_dilation(mask, iterations=reach)
+    ring = ndimage.binary_dilation(near, iterations=3 * reach) & ~near
+    skin = (hand.alpha > 0.9) & mask
+    if skin.sum() < 50:
+        return 0
+    tone = np.median(_chroma(hand.rgba[..., :3])[skin], axis=0)
+    luma = hand.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
+    lines = (hand.alpha > 0.5) & ndimage.binary_dilation(mask, iterations=2) & (luma < INK)
+    ink = np.median(_chroma(hand.rgba[..., :3])[lines], axis=0) if lines.sum() >= 20 else None
+    moved = 0
+    for i, hair in enumerate(parts):
+        if hair.tag != "front hair" or i < i_hand:
+            continue
+        around = (hair.alpha > 0.9) & ring
+        if around.sum() < 50:
+            continue
+        chroma = _chroma(hair.rgba[..., :3])
+        own = np.median(chroma[around], axis=0)
+        to_hand = np.linalg.norm(chroma - tone, axis=-1)
+        between = parts[i_hand + 1:i]
+        hidden = hair.alpha > 0.99
+        clear = np.all([(p.alpha < 0.01) | hidden for p in between], axis=0) if between else np.ones(mask.shape, bool)
+        alike = near & (hair.alpha > 0.3) & clear & (to_hand <= far) & (to_hand < np.linalg.norm(chroma - own, axis=-1))
+        dark = (hair.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)) < INK
+        own_ink = (hair.alpha > 0.9) & ring & dark
+        if ink is not None and own_ink.sum() >= 20:
+            # The hand's outline the hair drew too: dark, and nearer the hand's ink than the hair's.
+            to_ink = np.linalg.norm(chroma - ink, axis=-1)
+            outline = near & (hair.alpha > 0.3) & clear & dark
+            outline &= to_ink < np.linalg.norm(chroma - np.median(chroma[own_ink], axis=0), axis=-1)
+            alike |= outline & ndimage.binary_dilation(alike | mask, iterations=3)
+        labels, count = ndimage.label(alike, structure=np.ones((3, 3)))
+        if not count:
+            continue
+        sizes = np.asarray(ndimage.sum(alike, labels, range(1, count + 1)))
+        take = np.isin(labels, 1 + np.flatnonzero(sizes < piece * mask.sum()))
+        if not take.any():
+            continue
+        a, t = hair.alpha[take][:, None], hand.alpha[take][:, None]
+        total = a + t * (1 - a)
+        color = (hair.rgba[take][:, :3] * a + hand.rgba[take][:, :3] * t * (1 - a)) / np.maximum(total, 1e-6)
+        hand.rgba[take] = np.concatenate([color, total], axis=1)
+        hair.rgba[..., 3][take] = 0.0
+        for p in between:
+            p.rgba[..., 3][take] = 0.0
+        moved += int(take.sum())
+    return moved
 
 
 def weights(vertices, hand):

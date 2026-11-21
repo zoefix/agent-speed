@@ -304,11 +304,15 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   every face patch then changes the eyes and brows only, as the mouth stays on the instrument.
 - **Back hair alone**: See-Through paints a whole sheet of back hair behind the body (flat, the gaps between curls
   drawn as outlines), which showed as a slab once the hair swung out past the body. Back hair the body's clothes
-  (neck, top, neckwear, bottom, legwear, shoes) cover by over 0.995, more than 16 px from where the back hair shows,
-  goes, fading out from 8 px on (no straight cut edge once it swings out); what arms, hands, objects, the head or
-  the bangs cover stays within 40 px of where it shows (fading out from 20 px on), as far as their own small sways
+  (neck, top, neckwear, bottom, legwear, shoes) cover by over 0.995, more than 10 px from where the back hair shows,
+  goes, fading out from 5 px on (no straight cut edge once it swings out); what arms, hands, objects, the head or
+  the bangs cover stays within 20 px of where it shows (fading out from 10 px on), as far as their own small sways
   uncover it (a gesture shows the variant's art there): a long sleeve held out hid a whole sheet of it, a grey ghost
-  once the hair swung. A bit then cut off from the rest (under 5 % of its largest piece),
+  once the hair swung, and a wider band showed as a darker panel beside the body. The back hair's mesh is held by
+  the body near its outline: each vertex's share of `hairBack1`/`hairBack2` fades in over 0.6 face widths of distance
+  outside the body's and arms' layers, `chest` (`lower` below the waist) holding the rest, so the hair beside the
+  body never parts from it (a sliver of the stage) nor swings out what the body hid of it, and the curls farther out
+  swing fully. A bit then cut off from the rest (under 5 % of its largest piece),
   seen through a gap in the clothes that frame 60 % of its rim, would float once the hair swings: it goes into the
   clothing layer framing it most (the rest pose stays the same) and keeps still with it.
 - **Hidden paint**: what See-Through guessed of a layer under the layers drawn over it, where it stands apart from a
@@ -352,7 +356,7 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   and ghosts of a hand on a book give way to the layer's own texture.
 - **Held objects**: an object piece follows a hand only when that arm's sleeve or hand comes within 6 px of it (a
   pendant hanging from the belt by the hand stays with the body). One both hands touch (their hand layers, or their
-  sleeves without one) goes with the body (`lower` below the waist, `chest` above) and both arms swing 0.2 of their
+  sleeves without one) goes with the body (`lower` below the waist, `chest` above) and both arms swing 0.05 of their
   `Arm`/`Forearm`/`Wrist` turns and `Shoulder` moves; so do clasped hands (the hand drawn on top hides 15 % or more
   of the other, whose hidden part is a grey guess); otherwise the arm holding an object swings 0.5 of them (what the
   art hides behind it is a guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them, at
@@ -363,7 +367,10 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   wide sway uncovers. Gestures are variants and keep their reach; `Lift` and `Bend` keep theirs. An arm whose hand
   lies on the face or an ear (30 px or more over the face's layers, the ears or earwear: a finger at the chin, a fist
   rubbing an eye, a hand on a headphone) keeps to 0.05 of that, `Shoulder` too, so the hand stays there instead of
-  uncovering a smear on the neck, a torn jaw or carrying a piece of the headphone away.
+  uncovering a smear on the neck, a torn jaw or carrying a piece of the headphone away. An arm whose hand lies over the
+  other layers (body, clothes, objects, hair: 0.7 or more of the hand's opaque pixels) rather than out over the stage
+  keeps to 0.25 of it, `Shoulder` too: what the hand hides there is a guess as well (a dark smear on the chest, the old
+  hand's outline on a book).
 - **Hair swing**: the back hair turns at most 10° and 9° per segment at ±1, a lock or braid 12° and 14° (they were
   14°/12° and 20°/24°): what they hide is a guess. A lock's turns shrink by the share of it (the front hair below the
   chin) lying on the body's layers rather than over the stage or the back hair: a braid resting on the chest hardly
