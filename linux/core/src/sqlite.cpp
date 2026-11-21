@@ -132,6 +132,31 @@ Statement Connection::prepare(std::string_view sql) const {
     return Statement(db_, stmt);
 }
 
+Blob Connection::openBlob(const std::string& table, const std::string& column, std::int64_t rowid) const {
+    sqlite3_blob* blob = nullptr;
+    const int code = sqlite3_blob_open(db_, "main", table.c_str(), column.c_str(), rowid, 0, &blob);
+    if (code != SQLITE_OK || !blob) {
+        if (blob) sqlite3_blob_close(blob);
+        throw Error(code, message(db_));
+    }
+    return Blob(db_, blob, sqlite3_blob_bytes(blob));
+}
+
+Blob::~Blob() {
+    if (blob_) sqlite3_blob_close(blob_);
+}
+
+Blob::Blob(Blob&& other) noexcept : db_(other.db_), blob_(other.blob_), size_(other.size_) { other.blob_ = nullptr; }
+
+std::string Blob::read(std::int64_t offset, std::int64_t count) const {
+    if (offset < 0 || count < 0 || offset > size_ - count) throw Error(SQLITE_ERROR, "read past the blob");
+    std::string bytes(static_cast<std::size_t>(count), '\0');
+    if (count == 0) return bytes;
+    const int code = sqlite3_blob_read(blob_, bytes.data(), static_cast<int>(count), static_cast<int>(offset));
+    if (code != SQLITE_OK) throw Error(code, message(db_));
+    return bytes;
+}
+
 std::int64_t Connection::scalarInt64(std::string_view sql) const {
     Statement statement = prepare(sql);
     return statement.step() ? statement.getInt64(0) : 0;

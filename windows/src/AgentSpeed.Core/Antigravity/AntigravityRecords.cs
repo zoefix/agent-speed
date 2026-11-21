@@ -123,6 +123,143 @@ internal static class AntigravityDecoder
         return new AntigravityGeneration(idx, message.RepeatedUInt(2).ToHashSet(), response ?? label, response, label);
     }
 
+    /// <summary>Bounds of skimming a <c>gen_metadata</c> row too large to load (METRICS 4.8), in bytes or reads.</summary>
+    public const int MaxSkimBytes = 64 << 20;
+    public const int MaxSkimReads = 4096;
+    public const int MaxSkimSteps = 64 << 10;
+    public const int MaxSkimName = 4096;
+
+    /// <summary>
+    /// <c>CortexStepGeneratorMetadata</c> of a row too large to load, from its field headers alone (METRICS 4.8): each
+    /// key and varint (at most 20 bytes) is read at its offset and every payload passed over by its length, except
+    /// <c>step_indices</c> and the last <c>chat_model</c>'s <c>response_model</c> and <c>model_display_name</c>.
+    /// <paramref name="read"/> returns <c>size</c> bytes of the blob from <c>offset</c>.
+    /// </summary>
+    /// <exception cref="ProtoFormatException">Malformed, or more than <see cref="MaxSkimReads"/> reads.</exception>
+    public static AntigravityGeneration SkimGeneration(long idx, int length, Func<int, int, byte[]> read)
+    {
+        var reads = 0;
+        byte[] Take(int offset, int size)
+        {
+            if (++reads > MaxSkimReads)
+            {
+                throw new ProtoFormatException("too many fields to skim");
+            }
+
+            var bytes = read(offset, size);
+            return bytes.Length == size ? bytes : throw new ProtoFormatException("short read");
+        }
+
+        (ulong Number, int Wire, ulong Value, int Start, int End) Field(int position, int end)
+        {
+            var head = Take(position, Math.Min(20, end - position));
+            var i = 0;
+            var key = Varint(head, ref i);
+            if (key >> 3 == 0)
+            {
+                throw new ProtoFormatException("field number 0");
+            }
+
+            var wire = (int)(key & 7);
+            switch (wire)
+            {
+                case 0:
+                    var value = Varint(head, ref i);
+                    return (key >> 3, wire, value, position + i, position + i);
+                case 1:
+                case 5:
+                    var fixedSize = wire == 1 ? 8 : 4;
+                    return fixedSize <= end - position - i
+                        ? (key >> 3, wire, 0UL, position + i, position + i + fixedSize)
+                        : throw new ProtoFormatException("truncated fixed field");
+                case 2:
+                    var size = Varint(head, ref i);
+                    return size <= (ulong)(end - position - i)
+                        ? (key >> 3, wire, 0UL, position + i, position + i + (int)size)
+                        : throw new ProtoFormatException("truncated length-delimited field");
+                default:
+                    throw new ProtoFormatException($"wire type {wire}");
+            }
+        }
+
+        var steps = new HashSet<ulong>();
+        string response = string.Empty, label = string.Empty;
+        var at = 0;
+        while (at < length)
+        {
+            var field = Field(at, length);
+            at = field.End;
+            if (field.Number == 2 && field.Wire == 0)
+            {
+                steps.Add(field.Value);
+            }
+            else if (field.Number == 2 && field.Wire == 2)
+            {
+                if (field.End - field.Start > MaxSkimSteps)
+                {
+                    throw new ProtoFormatException("step indices too long");
+                }
+
+                var packed = field.End > field.Start ? Take(field.Start, field.End - field.Start) : Array.Empty<byte>();
+                var i = 0;
+                while (i < packed.Length)
+                {
+                    steps.Add(Varint(packed, ref i));
+                }
+            }
+            else if (field.Number == 1 && field.Wire == 2)
+            {
+                response = label = string.Empty;
+                var sub = field.Start;
+                while (sub < field.End)
+                {
+                    var inner = Field(sub, field.End);
+                    sub = inner.End;
+                    if (inner.Wire != 2 || inner.Number is not (19 or 21))
+                    {
+                        continue;
+                    }
+
+                    var size = inner.End - inner.Start;
+                    var text = size is > 0 and <= MaxSkimName ? Encoding.UTF8.GetString(Take(inner.Start, size)) : string.Empty;
+                    if (inner.Number == 19)
+                    {
+                        response = text;
+                    }
+                    else
+                    {
+                        label = text;
+                    }
+                }
+            }
+        }
+
+        var responseModel = NonEmpty(response);
+        var labelText = NonEmpty(label);
+        return new AntigravityGeneration(idx, steps, responseModel ?? labelText, responseModel, labelText);
+    }
+
+    private static ulong Varint(byte[] bytes, ref int i)
+    {
+        ulong value = 0;
+        for (var shift = 0; shift < 70; shift += 7)
+        {
+            if (i >= bytes.Length)
+            {
+                throw new ProtoFormatException("truncated varint");
+            }
+
+            var b = bytes[i++];
+            value |= (ulong)(b & 0x7F) << shift;
+            if ((b & 0x80) == 0)
+            {
+                return value;
+            }
+        }
+
+        throw new ProtoFormatException("varint longer than 10 bytes");
+    }
+
     /// <exception cref="ProtoFormatException">Malformed.</exception>
     public static AntigravityExecutor Executor(long idx, ReadOnlySpan<byte> blob)
     {

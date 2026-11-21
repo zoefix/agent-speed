@@ -166,4 +166,16 @@ internal static unsafe partial class SqliteNative
 
     [LibraryImport(Library)]
     public static partial int sqlite3_column_bytes(IntPtr statement, int column);
+
+    [LibraryImport(Library)]
+    public static partial int sqlite3_blob_open(IntPtr db, byte* database, byte* table, byte* column, long rowid, int flags, out IntPtr blob);
+
+    [LibraryImport(Library)]
+    public static partial int sqlite3_blob_read(IntPtr blob, void* buffer, int bytes, int offset);
+
+    [LibraryImport(Library)]
+    public static partial int sqlite3_blob_bytes(IntPtr blob);
+
+    [LibraryImport(Library)]
+    public static partial int sqlite3_blob_close(IntPtr blob);
 }

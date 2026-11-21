@@ -53,8 +53,9 @@ internal sealed class AntigravityDatabase : IDisposable
 
     private static readonly string StepsSql = $"SELECT {StepColumns} FROM steps WHERE idx > ?1 ORDER BY idx, rowid";
 
+    /// <summary>A row too large to load comes back with its rowid and length and is skimmed (METRICS 4.8).</summary>
     private static readonly string GenerationsSql = string.Create(CultureInfo.InvariantCulture,
-        $"SELECT idx, CASE WHEN typeof(size) = 'integer' AND size <= {MaxBlobBytes} AND length(data) <= {MaxBlobBytes} THEN data END FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid");
+        $"SELECT idx, rowid, CASE WHEN typeof(size) = 'integer' AND size <= {MaxBlobBytes} AND length(data) <= {MaxBlobBytes} THEN data END, CASE WHEN typeof(data) = 'blob' THEN length(data) END FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid");
 
     private static readonly string ExecutorsSql = string.Create(CultureInfo.InvariantCulture,
         $"SELECT idx, CASE WHEN length(data) <= {MaxBlobBytes} THEN data END FROM executor_metadata WHERE idx > ?1 ORDER BY idx, rowid");
@@ -196,12 +197,18 @@ internal sealed class AntigravityDatabase : IDisposable
             {
                 var idx = statement.GetInt64(0);
                 cursors.Generations = Math.Max(cursors.Generations, idx);
-                if (statement.IsNull(1))
+                if (statement.IsNull(2))
                 {
+                    var length = statement.IsNull(3) ? 0 : statement.GetInt64(3);
+                    if (length is > 0 and <= AntigravityDecoder.MaxSkimBytes)
+                    {
+                        SkimGeneration(idx, statement.GetInt64(1), (int)length, batch);
+                    }
+
                     continue;
                 }
 
-                var blob = statement.GetBlob(1);
+                var blob = statement.GetBlob(2);
                 bytes += blob.Length;
                 try
                 {
@@ -218,6 +225,26 @@ internal sealed class AntigravityDatabase : IDisposable
         }
 
         return bytes;
+    }
+
+    /// <summary>A <c>gen_metadata</c> row too large to load, read through incremental blob I/O (METRICS 4.8).</summary>
+    private void SkimGeneration(long idx, long rowid, int length, AntigravityBatch batch)
+    {
+        try
+        {
+            using var blob = SqliteBlob.Open(_connection, "gen_metadata", "data", rowid);
+            if (blob.Length != length)
+            {
+                batch.OnMalformed();
+                return;
+            }
+
+            batch.Generations.Add(AntigravityDecoder.SkimGeneration(idx, length, blob.Read));
+        }
+        catch (Exception e) when (e is ProtoFormatException or SqliteException)
+        {
+            batch.OnMalformed();
+        }
     }
 
     private long ReadExecutors(AntigravityCursors cursors, AntigravityBatch batch)

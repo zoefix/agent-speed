@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -63,6 +64,17 @@ struct Trajectory {
 // Decoders of the blobs (throw FormatError).
 Step decodeStep(std::string_view blob);
 Generation decodeGeneration(std::int64_t idx, std::string_view blob);
+// Bounds of skimming a `gen_metadata` row too large to load (METRICS 4.8): its blob length, reads, packed step
+// indices and model names, in bytes.
+inline constexpr std::int64_t kMaxSkimBytes = std::int64_t{64} << 20;
+inline constexpr int kMaxSkimReads = 4096;
+inline constexpr std::int64_t kMaxSkimSteps = std::int64_t{64} << 10;
+inline constexpr std::int64_t kMaxSkimName = 4096;
+// The generation of a row too large to load, from its field headers alone (METRICS 4.8): only `step_indices` and the
+// last `chat_model`'s `response_model` and `model_display_name` are read; `read(offset, count)` returns those bytes of
+// the blob of `length` bytes. Throws FormatError when malformed or past kMaxSkimReads reads.
+Generation skimGeneration(std::int64_t idx, std::int64_t length,
+                          const std::function<std::string(std::int64_t, std::int64_t)>& read);
 Executor decodeExecutor(std::int64_t idx, std::string_view blob);
 Trajectory decodeTrajectory(std::string_view blob);
 std::optional<std::string> uriBasename(const std::string& value);
@@ -142,6 +154,8 @@ public:
 
 private:
     Database(std::unique_ptr<sqlite::Connection> connection, bool immutable, bool supported);
+    // A `gen_metadata` row too large to load, read through incremental blob I/O (METRICS 4.8).
+    void skim(std::int64_t idx, std::int64_t rowid, std::int64_t length, Batch& batch);
     std::unique_ptr<sqlite::Connection> connection_;
     bool immutable_;
     bool supported_;

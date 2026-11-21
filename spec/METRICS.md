@@ -835,18 +835,31 @@ create a file. A database that cannot be opened or queried contributes nothing a
 without a `steps` table with the columns below carries the warning `unsupportedFormat` and contributes nothing (no agent).
 
 Only these queries run (`?` = the cursors of 5.4, `-1` for a complete read). The size guards keep large blobs unread:
-`gen_metadata` rows embed the whole prompt and reach hundreds of MB, so a row whose `size` column exceeds 1 MiB is
-never read, even when its blob would be small.
+`gen_metadata` rows embed the whole prompt and reach hundreds of MB, so a row whose `size` column exceeds 1 MiB (or is
+not an integer) or whose blob exceeds 1 MiB is never loaded whole; it is skimmed instead (below).
 
 ```sql
 SELECT idx, step_type, status, CASE WHEN length(metadata) <= 1048576 THEN metadata END FROM steps WHERE idx > ? ORDER BY idx, rowid
-SELECT idx, CASE WHEN typeof(size) = 'integer' AND size <= 1048576 AND length(data) <= 1048576 THEN data END FROM gen_metadata WHERE idx > ? ORDER BY idx, rowid
+SELECT idx, rowid, CASE WHEN typeof(size) = 'integer' AND size <= 1048576 AND length(data) <= 1048576 THEN data END, CASE WHEN typeof(data) = 'blob' THEN length(data) END FROM gen_metadata WHERE idx > ? ORDER BY idx, rowid
 SELECT idx, CASE WHEN length(data) <= 1048576 THEN data END FROM executor_metadata WHERE idx > ? ORDER BY idx, rowid
 SELECT CASE WHEN length(data) <= 1048576 THEN data END FROM trajectory_metadata_blob ORDER BY rowid LIMIT 1
 ```
 
 `step_payload` (prompts, responses, file contents) and the other blob columns are never read. NULL integers count as
-0; a NULL blob (absent or too large) is skipped without counting as malformed. The tables have no primary key: rows
+0; a NULL blob (absent or too large) is skipped without counting as malformed.
+
+**Skimming a large generation row.** A `gen_metadata` row whose `data` came back NULL but whose blob length (the
+query's last column) is from 1 to 67 108 864 bytes (64 MiB) is read in pieces through incremental blob I/O on its
+`rowid` (`sqlite3_blob_open` read-only and `sqlite3_blob_read`; never `substr`, which loads the whole value), so
+memory stays small however large the row is. The message is walked field by field from offset 0 as in the wire format
+below: each field's key and varint (at most 20 bytes) are read at its offset, and its payload is passed over by its
+length without being read, except `step_indices` (field 2: a varint, or a packed payload of at most 65 536 bytes,
+read) and, inside each `chat_model` (field 1, walked the same way), `response_model` 19 and `model_display_name` 21
+(read when 1 to 4096 bytes long; longer counts as missing). A later `chat_model` resets both names, as the last one
+wins when the row is decoded whole. The row yields the same generation as a whole decode would: its step indices and
+its two names. agy writes `step_indices` first and `chat_model` last, with the two names at its very end, so the walk
+reads a few hundred small pieces; it stops, and the row counts as malformed and is skipped, after 4096 reads, at a
+read past the blob or any malformed field (as a whole decode would). Rows over 64 MiB are skipped unread. The tables have no primary key: rows
 with the same `idx` are processed in `rowid` order, the later one replacing the earlier.
 
 #### Protobuf wire format

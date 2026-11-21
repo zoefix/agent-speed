@@ -102,7 +102,7 @@ public sealed class AntigravityLiveTests : IDisposable
     }
 
     [Fact]
-    public void OversizedBlobsAreNeverReadAndForkCopiesAreIgnored()
+    public void OversizedGenerationsAreSkimmedOtherOversizedBlobsAreNeverReadAndForkCopiesAreIgnored()
     {
         using var writer = new AgWriter(DbPath).Trajectory(AgBlobs.Trajectory(_t, "/w/orbit"));
         var huge = new byte[AntigravityDatabase.MaxBlobBytes + 1];
@@ -115,7 +115,8 @@ public sealed class AntigravityLiveTests : IDisposable
         reader.Read();
 
         var response = Assert.Single(reader.Sink.Latest);
-        Assert.Equal(("own", (string?)"planner-model"), (response.Key, response.Model));
+        // The generation row is too large to load, so it is skimmed: its own model wins over the planner's (METRICS 4.8).
+        Assert.Equal(("own", (string?)"from-a-huge-row"), (response.Key, response.Model));
         Assert.Equal(0, reader.Parser.MalformedLines);
         Assert.Equal(_t + 1010, reader.Parser.LastLineMs);
     }

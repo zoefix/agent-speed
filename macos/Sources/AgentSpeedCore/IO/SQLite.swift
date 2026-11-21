@@ -222,3 +222,34 @@ final class SQLiteStatement {
         return body(UnsafeRawBufferPointer(start: pointer, count: pointer == nil ? 0 : count))
     }
 }
+
+/// Read-only incremental access to one blob (`sqlite3_blob_open`): only the bytes asked for are copied out, so a large
+/// value is never loaded whole.
+final class SQLiteBlob {
+    private var blob: OpaquePointer?
+    let count: Int
+
+    init(_ connection: SQLiteConnection, table: String, column: String, rowid: Int64) throws {
+        guard let handle = connection.handle else { throw SQLiteError(code: SQLITE_MISUSE, message: "closed") }
+        let code = sqlite3_blob_open(handle, "main", table, column, rowid, 0, &blob)
+        guard code == SQLITE_OK, let blob else {
+            sqlite3_blob_close(blob)
+            throw connection.error(code)
+        }
+        count = Int(sqlite3_blob_bytes(blob))
+    }
+
+    deinit { sqlite3_blob_close(blob) }
+
+    /// `size` bytes from `offset`; throws for a range past the blob.
+    func read(_ offset: Int, _ size: Int) throws -> [UInt8] {
+        guard offset >= 0, size >= 0, offset <= count - size else {
+            throw SQLiteError(code: SQLITE_ERROR, message: "read past the blob")
+        }
+        var bytes = [UInt8](repeating: 0, count: size)
+        guard size > 0 else { return bytes }
+        let code = bytes.withUnsafeMutableBytes { sqlite3_blob_read(blob, $0.baseAddress, Int32(size), Int32(offset)) }
+        guard code == SQLITE_OK else { throw SQLiteError(code: code, message: "blob read failed") }
+        return bytes
+    }
+}

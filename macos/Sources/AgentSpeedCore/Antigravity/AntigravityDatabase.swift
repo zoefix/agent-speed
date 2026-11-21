@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Used by one thread at a time; it moves with the reader that owns it.
 final class AntigravityDatabase: @unchecked Sendable {
-    /// Blobs larger than this are never loaded; `gen_metadata` rows embed whole prompts.
+    /// Blobs larger than this are never loaded; `gen_metadata` rows embed whole prompts, so a larger one is skimmed.
     static let maxBlobBytes = 1 << 20
     static let requiredStepColumns: Set<String> = ["idx", "step_type", "status", "metadata"]
 
@@ -64,9 +64,11 @@ final class AntigravityDatabase: @unchecked Sendable {
             throw .unreadable
         }
         // Missing optional tables only mean those rows never exist.
+        // A row too large to load comes back with its rowid and length and is skimmed (METRICS 4.8).
         generationsStatement = try? opened.prepare("""
-            SELECT idx, CASE WHEN typeof(size) = 'integer' AND size <= \(Self.maxBlobBytes) AND length(data) <= \(Self.maxBlobBytes) \
-            THEN data END FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid
+            SELECT idx, rowid, CASE WHEN typeof(size) = 'integer' AND size <= \(Self.maxBlobBytes) \
+            AND length(data) <= \(Self.maxBlobBytes) THEN data END, CASE WHEN typeof(data) = 'blob' THEN length(data) END \
+            FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid
             """)
         executorsStatement = try? opened.prepare("""
             SELECT idx, CASE WHEN length(data) <= \(Self.maxBlobBytes) THEN data END FROM executor_metadata \
@@ -126,8 +128,15 @@ final class AntigravityDatabase: @unchecked Sendable {
         if let generationsStatement {
             generationsStatement.bind(1, cursors.generations)
             try generationsStatement.forEachRow { row in
-                batch.generations.append(AntigravityIndexedRow(
-                    idx: row.int64(0), value: row.isNull(1) ? nil : row.withBlob(1) { AntigravityBlobs.generation($0) }))
+                let length = row.isNull(3) ? 0 : Int(row.int64(3))
+                let value: LineExtraction<AntigravityGeneration>? = if !row.isNull(2) {
+                    row.withBlob(2) { AntigravityBlobs.generation($0) }
+                } else if length > 0, length <= AntigravityBlobs.maxSkimBytes {
+                    skimGeneration(rowid: row.int64(1), length: length)
+                } else {
+                    nil
+                }
+                batch.generations.append(AntigravityIndexedRow(idx: row.int64(0), value: value))
             }
         }
         if let executorsStatement {
@@ -150,6 +159,13 @@ final class AntigravityDatabase: @unchecked Sendable {
         stepsStatement.bind(1, cursors.steps)
         try stepsStatement.forEachRow { batch.steps.append(Self.step($0)) }
         return batch
+    }
+
+    /// A `gen_metadata` row too large to load, read through incremental blob I/O (METRICS 4.8).
+    private func skimGeneration(rowid: Int64, length: Int) -> LineExtraction<AntigravityGeneration> {
+        guard let blob = try? SQLiteBlob(connection, table: "gen_metadata", column: "data", rowid: rowid),
+              blob.count == length else { return .malformed }
+        return AntigravityBlobs.skimGeneration(length: length) { try blob.read($0, $1) }
     }
 
     private static func step(_ row: SQLiteStatement) -> AntigravityStepRow {

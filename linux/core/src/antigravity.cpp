@@ -262,6 +262,95 @@ Generation decodeGeneration(std::int64_t idx, std::string_view blob) {
     return g;
 }
 
+namespace {
+
+struct SkimField {
+    std::uint64_t number = 0;
+    int wire = 0;
+    std::uint64_t varint = 0;
+    std::int64_t start = 0, end = 0;
+};
+
+std::uint64_t skimVarint(std::string_view bytes, std::size_t& i) {
+    std::uint64_t value = 0;
+    for (int shift = 0; shift < 70; shift += 7) {
+        if (i >= bytes.size()) throw FormatError("truncated varint");
+        const auto byte = static_cast<unsigned char>(bytes[i++]);
+        value |= static_cast<std::uint64_t>(byte & 0x7F) << shift;
+        if (!(byte & 0x80)) return value;
+    }
+    throw FormatError("varint longer than 10 bytes");
+}
+
+}  // namespace
+
+Generation skimGeneration(std::int64_t idx, std::int64_t length,
+                          const std::function<std::string(std::int64_t, std::int64_t)>& read) {
+    int reads = 0;
+    const auto take = [&](std::int64_t offset, std::int64_t count) {
+        if (++reads > kMaxSkimReads) throw FormatError("too many fields to skim");
+        auto bytes = read(offset, count);
+        if (static_cast<std::int64_t>(bytes.size()) != count) throw FormatError("short read");
+        return bytes;
+    };
+    const auto field = [&](std::int64_t position, std::int64_t end) {
+        const auto head = take(position, std::min<std::int64_t>(20, end - position));
+        std::size_t i = 0;
+        const auto key = skimVarint(head, i);
+        if (key >> 3 == 0) throw FormatError("field number 0");
+        SkimField f;
+        f.number = key >> 3;
+        f.wire = static_cast<int>(key & 7);
+        if (f.wire == 0) {
+            f.varint = skimVarint(head, i);
+            f.start = f.end = position + static_cast<std::int64_t>(i);
+        } else if (f.wire == 1 || f.wire == 5) {
+            const std::int64_t size = f.wire == 1 ? 8 : 4;
+            f.start = position + static_cast<std::int64_t>(i);
+            if (size > end - f.start) throw FormatError("truncated fixed field");
+            f.end = f.start + size;
+        } else if (f.wire == 2) {
+            const auto size = skimVarint(head, i);
+            f.start = position + static_cast<std::int64_t>(i);
+            if (size > static_cast<std::uint64_t>(end - f.start)) throw FormatError("truncated length-delimited field");
+            f.end = f.start + static_cast<std::int64_t>(size);
+        } else {
+            throw FormatError("unsupported wire type");
+        }
+        return f;
+    };
+
+    Generation g;
+    g.idx = idx;
+    std::string response, label;
+    for (std::int64_t at = 0; at < length;) {
+        const auto f = field(at, length);
+        at = f.end;
+        if (f.number == 2 && f.wire == 0) {
+            g.stepIndices.insert(f.varint);
+        } else if (f.number == 2 && f.wire == 2) {
+            if (f.end - f.start > kMaxSkimSteps) throw FormatError("step indices too long");
+            const auto packed = f.end > f.start ? take(f.start, f.end - f.start) : std::string();
+            for (std::size_t i = 0; i < packed.size();) g.stepIndices.insert(skimVarint(packed, i));
+        } else if (f.number == 1 && f.wire == 2) {
+            response.clear();
+            label.clear();
+            for (std::int64_t sub = f.start; sub < f.end;) {
+                const auto inner = field(sub, f.end);
+                sub = inner.end;
+                if (inner.wire != 2 || (inner.number != 19 && inner.number != 21)) continue;
+                const auto size = inner.end - inner.start;
+                auto text = size > 0 && size <= kMaxSkimName ? take(inner.start, size) : std::string();
+                (inner.number == 19 ? response : label) = std::move(text);
+            }
+        }
+    }
+    g.responseModel = nonEmpty(response);
+    g.label = nonEmpty(label);
+    g.model = g.responseModel ? g.responseModel : g.label;
+    return g;
+}
+
 Executor decodeExecutor(std::int64_t idx, std::string_view blob) {
     const Proto m(blob);
     Executor e;
@@ -572,6 +661,23 @@ std::unique_ptr<Database> Database::open(const std::string& path) {
     return std::unique_ptr<Database>(new Database(std::move(connection), immutable, supported));
 }
 
+void Database::skim(std::int64_t idx, std::int64_t rowid, std::int64_t length, Batch& batch) {
+    try {
+        const auto blob = connection_->openBlob("gen_metadata", "data", rowid);
+        if (blob.size() != length) {
+            ++batch.malformed;
+            return;
+        }
+        batch.generations.push_back(skimGeneration(idx, length, [&](std::int64_t offset, std::int64_t count) {
+            return blob.read(offset, count);
+        }));
+    } catch (const FormatError&) {
+        ++batch.malformed;
+    } catch (const sqlite::Error&) {
+        ++batch.malformed;
+    }
+}
+
 std::int64_t Database::read(Cursors& cursors, Batch& batch) {
     const std::string blob = std::to_string(kMaxBlobBytes);
     std::int64_t bytes = 0;
@@ -598,15 +704,21 @@ std::int64_t Database::read(Cursors& cursors, Batch& batch) {
             }
         }
         try {
-            auto s = connection_->prepare("SELECT idx, CASE WHEN typeof(size) = 'integer' AND size <= " + blob +
+            // A row too large to load comes back with its rowid and length and is skimmed (METRICS 4.8).
+            auto s = connection_->prepare("SELECT idx, rowid, CASE WHEN typeof(size) = 'integer' AND size <= " + blob +
                                           " AND length(data) <= " + blob +
-                                          " THEN data END FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid");
+                                          " THEN data END, CASE WHEN typeof(data) = 'blob' THEN length(data) END"
+                                          " FROM gen_metadata WHERE idx > ?1 ORDER BY idx, rowid");
             s.bind(1, cursors.generations);
             while (s.step()) {
                 const auto idx = s.getInt64(0);
                 cursors.generations = std::max(cursors.generations, idx);
-                if (s.isNull(1)) continue;
-                const auto data = s.getBlob(1);
+                if (s.isNull(2)) {
+                    const auto length = s.isNull(3) ? 0 : s.getInt64(3);
+                    if (length > 0 && length <= kMaxSkimBytes) skim(idx, s.getInt64(1), length, batch);
+                    continue;
+                }
+                const auto data = s.getBlob(2);
                 bytes += static_cast<std::int64_t>(data.size());
                 try {
                     batch.generations.push_back(decodeGeneration(idx, data));

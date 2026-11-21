@@ -5,6 +5,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
+    antigravity_skim_test.cpp
     board_test.cpp
     character_balance_test.cpp
     character_catalog_test.cpp

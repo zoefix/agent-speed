@@ -10,6 +10,7 @@
 
 struct sqlite3;
 struct sqlite3_stmt;
+struct sqlite3_blob;
 
 // A thin read-only SQLite layer for the database sources (METRICS 4.5, 5.2, 5.4).
 namespace agentspeed::sqlite {
@@ -63,6 +64,27 @@ private:
     sqlite3_stmt* stmt_;
 };
 
+// Read-only incremental access to one blob (`sqlite3_blob_open`): only the bytes asked for are copied out, so a large
+// value is never loaded whole.
+class Blob {
+public:
+    ~Blob();
+    Blob(const Blob&) = delete;
+    Blob& operator=(const Blob&) = delete;
+    Blob(Blob&& other) noexcept;
+
+    std::int64_t size() const { return size_; }
+    // `count` bytes from `offset`; throws Error for a range past the blob.
+    std::string read(std::int64_t offset, std::int64_t count) const;
+
+private:
+    friend class Connection;
+    Blob(sqlite3* db, sqlite3_blob* blob, std::int64_t size) : db_(db), blob_(blob), size_(size) {}
+    sqlite3* db_;
+    sqlite3_blob* blob_;
+    std::int64_t size_;
+};
+
 class Connection {
 public:
     static Connection open(const std::string& path, OpenMode mode, int busyTimeoutMs = 2000);
@@ -72,6 +94,8 @@ public:
     Connection(Connection&& other) noexcept;
 
     Statement prepare(std::string_view sql) const;
+    // Read-only, in the main database.
+    Blob openBlob(const std::string& table, const std::string& column, std::int64_t rowid) const;
     std::int64_t scalarInt64(std::string_view sql) const;
     void execute(const std::string& sql) const;
     bool hasTables(std::initializer_list<std::string_view> names) const;

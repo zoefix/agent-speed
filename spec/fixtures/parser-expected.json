@@ -5691,7 +5691,7 @@
       "antigravity/antigravity-cli/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db": {
         "source": "antigravity",
         "project": "star map",
-        "model": "gemini-3.1-pro",
+        "model": "gemini-3.1-pro-low",
         "isSubagent": false,
         "parentFile": null,
         "phase": "idle",
@@ -5758,13 +5758,16 @@
             "cacheWrite1hInput": 0,
             "output": 1200,
             "reasoning": 400,
-            "model": "gemini-3.1-pro",
+            "model": "gemini-3.1-pro-low",
             "provider": null,
             "fast": false,
             "final": true
           }
         ],
-        "effort": null,
+        "effort": {
+          "mode": "low",
+          "evidence": "recorded"
+        },
         "speed": {
           "mode": "fast",
           "evidence": "configured",
@@ -5793,7 +5796,10 @@
             "speed": null
           },
           "resp-ag-main-4": {
-            "effort": null,
+            "effort": {
+              "mode": "low",
+              "evidence": "recorded"
+            },
             "speed": null
           }
         }

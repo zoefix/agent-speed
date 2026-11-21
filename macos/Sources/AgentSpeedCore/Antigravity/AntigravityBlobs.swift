@@ -16,6 +16,21 @@ enum AntigravityBlobs {
         extraction(try? generationMetadata(blob))
     }
 
+    /// Bounds of skimming a `gen_metadata` row too large to load (METRICS 4.8): its blob length, reads, packed step
+    /// indices and model names, in bytes.
+    static let maxSkimBytes = 64 << 20
+    static let maxSkimReads = 4096
+    static let maxSkimSteps = 64 << 10
+    static let maxSkimName = 4096
+
+    /// `CortexStepGeneratorMetadata` of a row too large to load, from its field headers alone (METRICS 4.8): only
+    /// `step_indices` and the last `chat_model`'s `response_model` and `model_display_name` are read; `read(offset,
+    /// size)` returns those bytes of the blob of `length` bytes.
+    static func skimGeneration(length: Int, read: @escaping (Int, Int) throws -> [UInt8]) -> LineExtraction<AntigravityGeneration> {
+        var skim = GenerationSkim(length: length, read: read)
+        return extraction(try? skim.run())
+    }
+
     /// `ExecutorMetadata` of `executor_metadata.data`.
     static func executor(_ blob: UnsafeRawBufferPointer) -> LineExtraction<AntigravityExecutor> {
         extraction(try? executorMetadata(blob))
@@ -200,5 +215,106 @@ enum AntigravityBlobs {
         if isDigit(byte) { return byte - UInt8(ascii: "0") }
         let lower = byte | 0x20
         return (UInt8(ascii: "a")...UInt8(ascii: "f")).contains(lower) ? lower - UInt8(ascii: "a") + 10 : nil
+    }
+}
+
+
+/// Walks a `CortexStepGeneratorMetadata` field by field, reading each key and varint (at most 20 bytes) and passing
+/// over payloads by their length, except the step indices and the two model names (METRICS 4.8).
+private struct GenerationSkim {
+    private struct Field {
+        let number: UInt64
+        let wire: UInt8
+        let varint: UInt64
+        let start: Int
+        let end: Int
+        var size: Int { end - start }
+    }
+
+    let length: Int
+    let read: (Int, Int) throws -> [UInt8]
+    private var reads = 0
+
+    init(length: Int, read: @escaping (Int, Int) throws -> [UInt8]) {
+        self.length = length
+        self.read = read
+    }
+
+    mutating func run() throws -> AntigravityGeneration {
+        var steps = Set<UInt64>()
+        var response = "", label = ""
+        var position = 0
+        while position < length {
+            let field = try field(at: position, end: length)
+            position = field.end
+            if field.number == 2, field.wire == 0 {
+                steps.insert(field.varint)
+            } else if field.number == 2, field.wire == 2 {
+                guard field.size <= AntigravityBlobs.maxSkimSteps else { throw ProtobufError.truncated }
+                let packed = field.size > 0 ? try take(field.start, field.size) : []
+                var i = 0
+                while i < packed.count { steps.insert(try Self.varint(packed, &i)) }
+            } else if field.number == 1, field.wire == 2 {
+                response = ""
+                label = ""
+                var sub = field.start
+                while sub < field.end {
+                    let inner = try self.field(at: sub, end: field.end)
+                    sub = inner.end
+                    guard inner.wire == 2, inner.number == 19 || inner.number == 21 else { continue }
+                    let text = inner.size > 0 && inner.size <= AntigravityBlobs.maxSkimName
+                        ? String(decoding: try take(inner.start, inner.size), as: UTF8.self) : ""
+                    if inner.number == 19 { response = text } else { label = text }
+                }
+            }
+        }
+        var generation = AntigravityGeneration(stepIndices: steps)
+        generation.responseModel = response.isEmpty ? nil : response
+        generation.label = label.isEmpty ? nil : label
+        generation.model = generation.responseModel ?? generation.label
+        return generation
+    }
+
+    private mutating func take(_ offset: Int, _ size: Int) throws -> [UInt8] {
+        reads += 1
+        guard reads <= AntigravityBlobs.maxSkimReads else { throw ProtobufError.truncated }
+        let bytes = try read(offset, size)
+        guard bytes.count == size else { throw ProtobufError.truncated }
+        return bytes
+    }
+
+    private mutating func field(at position: Int, end: Int) throws -> Field {
+        let head = try take(position, min(20, end - position))
+        var i = 0
+        let key = try Self.varint(head, &i)
+        guard key >> 3 != 0 else { throw ProtobufError.fieldNumberZero }
+        let wire = UInt8(key & 7)
+        switch wire {
+        case 0:
+            let value = try Self.varint(head, &i)
+            return Field(number: key >> 3, wire: wire, varint: value, start: position + i, end: position + i)
+        case 1, 5:
+            let size = wire == 1 ? 8 : 4
+            guard size <= end - position - i else { throw ProtobufError.truncated }
+            return Field(number: key >> 3, wire: wire, varint: 0, start: position + i, end: position + i + size)
+        case 2:
+            let size = try Self.varint(head, &i)
+            guard size <= UInt64(end - position - i) else { throw ProtobufError.truncated }
+            return Field(number: key >> 3, wire: wire, varint: 0, start: position + i, end: position + i + Int(size))
+        default:
+            throw ProtobufError.unsupportedWireType(wire)
+        }
+    }
+
+    private static func varint(_ bytes: [UInt8], _ i: inout Int) throws -> UInt64 {
+        var value: UInt64 = 0
+        for shift in stride(from: UInt64(0), through: 63, by: 7) {
+            guard i < bytes.count else { throw ProtobufError.truncated }
+            let byte = bytes[i]
+            i += 1
+            value |= UInt64(byte & 0x7F) << shift
+            if byte & 0x80 == 0 { return value }
+        }
+        throw ProtobufError.overlongVarint
     }
 }

@@ -191,6 +191,16 @@ def generation(steps, response_model=None, display=None, packed=True, ttft=700, 
     return pb_msg(1, chat) + indices + pb_str(4, "exec-7f21")
 
 
+def generation_as_agy(steps, response_model, display, messages=3):
+    """CortexStepGeneratorMetadata in the order agy writes it: step_indices first, chat_model last with the prompt's
+    messages (field 2) before response_model and model_display_name, which end the row (METRICS 4.8)."""
+    chat = b"".join([pb_str(1, "(system prompt omitted)")]
+                    + [pb_msg(2, pb_str(1, "(message %d omitted)" % i)) for i in range(messages)]
+                    + [pb_int(3, 1026), pb_msg(4, usage(inp=1, out=1)), duration(11, 900), duration(12, 9000),
+                       pb_str(19, response_model), pb_msg(20, pb_str(1, "(route omitted)")), pb_str(21, display)])
+    return pb_packed(2, steps) + pb_str(4, "exec-7f21") + pb_msg(1, chat)
+
+
 def executor(reason, last_step, model_name, thinking=0):
     """ExecutorMetadata: termination_reason 1, last_step_idx 3, cascade_config 10 -> planner_config 1 -> model_name 28
     and, for pass-through effort, completion_config_override 56 -> thinking_level 19."""
@@ -319,7 +329,8 @@ def main_conversation():
         (generation([1], "gemini-3.1-pro-high", "Gemini 3.1 Pro (High)"), None),
         (generation([3], "gemini-3.1-pro-high-exp-b", "Gemini 3.1 Pro (High)", packed=False), None),
         (generation([5], None, "Gemini 3.1 Pro (High)"), None),
-        (generation([7], "decoy-oversized-row-must-not-be-read"), 314_572_800),  # embeds the whole prompt in reality
+        # Embeds the whole prompt in reality: skimmed for its steps and model only (METRICS 4.8).
+        (generation_as_agy([7], "gemini-3.1-pro-low", "Gemini 3.1 Pro (Low)"), 314_572_800),
     ]
     c.executors = [executor(4, 8, "gemini-3.1-pro")]  # NO_TOOL_CALL
     return c

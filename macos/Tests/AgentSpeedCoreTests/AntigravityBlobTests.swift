@@ -82,6 +82,37 @@ enum AntigravityBlobEncoder {
 
 @Suite("Antigravity blobs")
 struct AntigravityBlobTests {
+
+    /// A row as agy writes it: step indices first, then a chat model whose prompt messages come before the two names.
+    static func agyGeneration(prompt: Int) -> [UInt8] {
+        typealias PB = ProtobufEncoder
+        let chat = PB.string(1, "(system prompt omitted)") + PB.message(2, PB.bytes(1, [UInt8](repeating: 0x61, count: prompt)))
+            + PB.uint(3, 1026) + PB.string(19, "gemini-4-hydrogen-high") + PB.string(21, "Gemini 4 Hydrogen (High)")
+        return PB.packed(2, [5, 6]) + PB.string(4, "exec-7f21") + PB.message(1, chat)
+    }
+
+    @Test func aLargeRowIsSkimmedForItsStepsAndModelWithoutReadingItsPrompt() throws {
+        let blob = Self.agyGeneration(prompt: 3 << 20)
+        var read = 0
+        let extraction = AntigravityBlobs.skimGeneration(length: blob.count) { offset, size in
+            read += size
+            return Array(blob[offset..<(offset + size)])
+        }
+        guard case .line(let generation) = extraction else { Issue.record("not skimmed"); return }
+        #expect(generation.stepIndices == [5, 6])
+        #expect(generation.model == "gemini-4-hydrogen-high")
+        #expect(generation.label == "Gemini 4 Hydrogen (High)")
+        #expect(read < 1024, "only headers, step indices and names are read")
+    }
+
+    @Test func aSkimStopsAfterItsReadLimit() {
+        typealias PB = ProtobufEncoder
+        var chat: [UInt8] = []
+        for _ in 0...AntigravityBlobs.maxSkimReads { chat += PB.string(2, "m") }
+        let blob = PB.packed(2, [1]) + PB.message(1, chat + PB.string(19, "gemini-4-neon"))
+        let extraction = AntigravityBlobs.skimGeneration(length: blob.count) { Array(blob[$0..<($0 + $1)]) }
+        guard case .malformed = extraction else { Issue.record("expected malformed"); return }
+    }
     typealias PB = ProtobufEncoder
     typealias AG = AntigravityBlobEncoder
 

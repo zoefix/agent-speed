@@ -612,11 +612,11 @@
           "unpricedRequests": 0
         },
         "gemini-3.1-pro": {
-          "requests": 3,
-          "output": 1400,
-          "measuredOutput": 1400,
-          "measuredMs": 11000,
-          "costMicroUsd": 23000,
+          "requests": 2,
+          "output": 200,
+          "measuredOutput": 200,
+          "measuredMs": 2000,
+          "costMicroUsd": 6000,
           "unpricedRequests": 0
         },
         "gemini-3.1-pro-high": {
@@ -636,11 +636,11 @@
           "unpricedRequests": 0
         },
         "gemini-3.1-pro-low": {
-          "requests": 1,
-          "output": 300,
-          "measuredOutput": 300,
-          "measuredMs": 3000,
-          "costMicroUsd": 5800,
+          "requests": 2,
+          "output": 1500,
+          "measuredOutput": 1500,
+          "measuredMs": 12000,
+          "costMicroUsd": 22800,
           "unpricedRequests": 0
         },
         "gemini-3.5-flash-extra-low": {
@@ -4566,9 +4566,9 @@
       "day": "2026-10-21",
       "source": "antigravity",
       "model": "gemini-3.1-pro",
-      "n": 3,
-      "outputSum": 1400,
-      "durationMsSum": 11000,
+      "n": 2,
+      "outputSum": 200,
+      "durationMsSum": 2000,
       "latencyBins": [
         0,
         0,
@@ -4635,16 +4635,16 @@
         0,
         0
       ],
-      "reasonN": 1,
-      "reasonOutput": 400,
-      "reasonDurationMsSum": 9000,
-      "cacheN": 3,
-      "cacheInput": 18900,
-      "cacheCached": 16000,
+      "reasonN": 0,
+      "reasonOutput": 0,
+      "reasonDurationMsSum": 0,
+      "cacheN": 2,
+      "cacheInput": 2000,
+      "cacheCached": 0,
       "toolN": 0,
       "toolLnSum": 0.0,
       "toolFailed": 0,
-      "activeMs": 11000
+      "activeMs": 2000
     },
     {
       "day": "2026-10-21",
@@ -4818,9 +4818,9 @@
       "day": "2026-10-21",
       "source": "antigravity",
       "model": "gemini-3.1-pro-low",
-      "n": 1,
-      "outputSum": 300,
-      "durationMsSum": 3000,
+      "n": 2,
+      "outputSum": 1500,
+      "durationMsSum": 12000,
       "latencyBins": [
         0,
         0,
@@ -4887,16 +4887,16 @@
         0,
         0
       ],
-      "reasonN": 1,
-      "reasonOutput": 120,
-      "reasonDurationMsSum": 3000,
-      "cacheN": 1,
-      "cacheInput": 8600,
-      "cacheCached": 8000,
+      "reasonN": 2,
+      "reasonOutput": 520,
+      "reasonDurationMsSum": 12000,
+      "cacheN": 2,
+      "cacheInput": 25500,
+      "cacheCached": 24000,
       "toolN": 0,
       "toolLnSum": 0.0,
       "toolFailed": 0,
-      "activeMs": 3000
+      "activeMs": 12000
     },
     {
       "day": "2026-10-21",

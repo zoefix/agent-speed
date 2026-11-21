@@ -68,6 +68,12 @@ GEMINI_SANITIZE = re.compile(r"[^A-Za-z0-9_-]")
 GEMINI_CANCELLED = "Request cancelled."
 OMP_COPY_MS = 2000
 AG_BLOB_MAX = 1024 * 1024
+# An oversized gen_metadata row up to AG_SKIM_MAX bytes is skimmed (METRICS 4.8): at most AG_SKIM_READS reads of field
+# headers, step indices up to AG_SKIM_STEPS bytes and model names up to AG_SKIM_NAME bytes.
+AG_SKIM_MAX = 64 * 1024 * 1024
+AG_SKIM_READS = 4096
+AG_SKIM_STEPS = 64 * 1024
+AG_SKIM_NAME = 4096
 AG_TOKEN_MAX = 10_000_000
 AG_OPEN = {1, 2, 8, 9, 11}
 AG_FAILED = {6, 7, 12}
@@ -3187,6 +3193,96 @@ def ag_generation(data):
                 response=pb_str(chat, 19) or None, label=pb_str(chat, 21) or None)
 
 
+def ag_skim(state, db, rowid, length):
+    """The generation of an oversized gen_metadata row, read in pieces from the blob (incremental blob reads where the
+    runtime has them, else substr): None and counted malformed when it does not skim (METRICS 4.8)."""
+    blob = db.blobopen("gen_metadata", "data", rowid, readonly=True) if hasattr(db, "blobopen") else None
+
+    def read(pos, size):
+        if blob is not None:
+            blob.seek(pos)
+            return blob.read(size)
+        (chunk,) = db.execute("SELECT substr(data, ?, ?) FROM gen_metadata WHERE rowid = ?",
+                              (pos + 1, size, rowid)).fetchone()
+        return bytes(chunk)
+    try:
+        return ag_skim_generation(read, length)
+    except (ValueError, sqlite3.DatabaseError):
+        state.malformed += 1
+        return None
+    finally:
+        if blob is not None:
+            blob.close()
+
+
+def ag_skim_generation(read, length):
+    """Step indices and models of a CortexStepGeneratorMetadata of `length` bytes from its field headers alone: every
+    other field is passed over by its length, so only the headers, `step_indices` and the last `chat_model`'s
+    `response_model` and `model_display_name` are read (`read(pos, size)` returns those bytes). Raises ValueError when
+    the message is malformed, the reads exceed AG_SKIM_READS or step_indices AG_SKIM_STEPS bytes; a model name over
+    AG_SKIM_NAME bytes counts as missing."""
+    reads = [0]
+
+    def take(pos, size):
+        reads[0] += 1
+        if reads[0] > AG_SKIM_READS:
+            raise ValueError("too many fields to skim")
+        chunk = read(pos, size)
+        if len(chunk) != size:
+            raise ValueError("short read")
+        return chunk
+
+    def field(pos, end):
+        head = take(pos, min(20, end - pos))
+        key, i = pb_varint(head, 0)
+        number, wire = key >> 3, key & 7
+        if number == 0:
+            raise ValueError("field 0")
+        if wire == 0:
+            value, j = pb_varint(head, i)
+            return number, wire, value, pos + j
+        if wire in (1, 5):
+            size = 8 if wire == 1 else 4
+            if pos + i + size > end:
+                raise ValueError("truncated fixed field")
+            return number, wire, None, pos + i + size
+        if wire == 2:
+            size, j = pb_varint(head, i)
+            if size > end - pos - j:
+                raise ValueError("truncated length-delimited field")
+            return number, wire, (pos + j, size), pos + j + size
+        raise ValueError("wire type %d" % wire)
+
+    steps, response, label, pos = [], "", "", 0
+    while pos < length:
+        number, wire, value, pos = field(pos, length)
+        if number == 2 and wire == 0:
+            steps.append(value)
+        elif number == 2 and wire == 2:
+            start, size = value
+            if size > AG_SKIM_STEPS:
+                raise ValueError("step indices too long")
+            data = take(start, size) if size else b""
+            i = 0
+            while i < len(data):
+                item, i = pb_varint(data, i)
+                steps.append(item)
+        elif number == 1 and wire == 2:
+            start, size = value
+            response = label = ""
+            sub = start
+            while sub < start + size:
+                inner, kind, part, sub = field(sub, start + size)
+                if inner in (19, 21) and kind == 2:
+                    at, n = part
+                    text = take(at, n).decode("utf-8", "replace") if 0 < n <= AG_SKIM_NAME else ""
+                    if inner == 19:
+                        response = text
+                    else:
+                        label = text
+    return dict(steps=set(steps), model=response or label or None, response=response or None, label=label or None)
+
+
 def ag_executor(data):
     fields = pb_fields(data)
     planner = pb_msg(pb_msg(fields, 10) or [], 1) or []
@@ -3256,10 +3352,12 @@ def antigravity_state(db_path, dedupe):
         if traj:
             st.project, st.is_subagent, st.parent_session = traj["project"], traj["subagent"], traj["parent"]
         st.file_created = created
-        gens = [g for _, blob in ag_last_per_idx(ag_rows(
-                    db, "SELECT idx, CASE WHEN typeof(size) = 'integer' AND size <= %d AND length(data) <= %d THEN data "
-                        "END FROM gen_metadata WHERE idx > -1 ORDER BY idx, rowid" % (AG_BLOB_MAX, AG_BLOB_MAX)))
-                for g in [ag_decode(st, blob, ag_generation)] if g]
+        gens = [g for _, rowid, blob, length in ag_last_per_idx(ag_rows(
+                    db, "SELECT idx, rowid, CASE WHEN typeof(size) = 'integer' AND size <= %d AND length(data) <= %d "
+                        "THEN data END, CASE WHEN typeof(data) = 'blob' THEN length(data) END FROM gen_metadata "
+                        "WHERE idx > -1 ORDER BY idx, rowid" % (AG_BLOB_MAX, AG_BLOB_MAX)))
+                for g in [ag_decode(st, blob, ag_generation) if blob is not None
+                          else ag_skim(st, db, rowid, length) if length and length <= AG_SKIM_MAX else None] if g]
         execs = [dict(e, idx=idx) for idx, blob in ag_last_per_idx(ag_rows(
                     db, "SELECT idx, CASE WHEN length(data) <= %d THEN data END FROM executor_metadata WHERE idx > -1 "
                         "ORDER BY idx, rowid" % AG_BLOB_MAX))
