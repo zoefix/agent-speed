@@ -89,7 +89,10 @@ def split_hands(parts, found, reference, sam):
         if hand is None:
             out.append(layer)
             continue
-        out += list(hands.split(layer, hand, masks.get(layer.side), reference))
+        mask = masks.get(layer.side)
+        holds = mask is None or any((ndimage.binary_dilation(p.alpha > 0.3, iterations=6) & mask).any()
+                                    for p in parts if p.tag == "objects")
+        out += list(hands.split(layer, hand, mask, reference, holds=holds))
     return out, found
 
 
@@ -125,6 +128,31 @@ def hands_clasped(parts, share=0.15):
     lower, upper = hands[0], hands[-1]
     solid = lower.alpha > 0.5
     return bool(solid.any()) and float((solid & (upper.alpha > 0.5)).sum() / solid.sum()) >= share
+
+
+HEAD_HELD = layers.FACE_TAGS + ("ears", "earwear")
+
+
+def hands_at_face(parts, min_px=30):
+    """Sides whose hand lies on the face or an ear by at least `min_px` (a finger at the chin, a fist rubbing an eye,
+    a hand on a headphone): what it hides there is a guess, a smear once the hand moves off, or a piece of the ear
+    carried away."""
+    face = layers.coverage([p for p in parts if p.tag in HEAD_HELD]) > 0.5
+    return sorted({p.side for p in parts if p.tag == "hand" and p.side in ("left", "right")
+                   and int(((p.alpha > 0.5) & face).sum()) >= min_px})
+
+
+def lock_on_body(parts, lm):
+    """Share of the front hair's lock (what hangs below the chin, as skeleton.landmarks finds it) lying over the body's
+    layers rather than over the stage or the back hair."""
+    hair = next((p for p in parts if p.name == "front hair"), None)
+    if hair is None:
+        return 0.0
+    _, fy0, _, fy1 = lm["face"]
+    lock = hair.alpha > 0.3
+    lock[:int(lm["chin"] + 0.15 * (fy1 - fy0))] = False
+    body = layers.coverage([p for p in parts[:parts.index(hair)] if p.tag != "back hair"]) > 0.5
+    return float((lock & body).sum() / lock.sum()) if lock.any() else 0.0
 
 
 def touches_arm(layer, parts, side, reach=6):
@@ -248,6 +276,9 @@ def main(argv=None):
         print(f"copies of the tail repainted in: {', '.join(copies)}")
     arms_taken = layers.objects_over_arms(parts, reference)
     parts, over_face = layers.arms_over_face(parts, reference)
+    parts, ears_moved = layers.earrings_over_hair(parts, reference)
+    if ears_moved:
+        print(f"earrings the art shows over the locks drawn above them: {ears_moved} px")
     on_face = layers.objects_over_face(parts)
     if on_face.any():
         print(f"objects the art shows over the face, kept by face patches: {int(on_face.sum())} px")
@@ -341,6 +372,12 @@ def main(argv=None):
     if not lm.get("twoHanded") and hands_clasped(parts):
         lm["twoHanded"] = True
         print("hands clasped: both arms keep together")
+    lm["faceHands"] = hands_at_face(parts)
+    if "lock" in lm:
+        lm["lockOnBody"] = lock_on_body(parts, lm)
+        print(f"lock on the body: {lm['lockOnBody']:.2f} of it")
+    if lm["faceHands"]:
+        print(f"hands on the face keep still: {', '.join(lm['faceHands'])}")
     if playing:
         # An instrument at the lips: the mouth stays as drawn under every face patch; only eyes and brows change.
         try:

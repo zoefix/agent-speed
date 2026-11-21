@@ -23,16 +23,25 @@ BEND_RANGE = 90.0
 HELD_SWING = 0.5
 # Every arm's own sway (Shoulder, Arm, Forearm, Wrist) is this much of its range: what an arm hides of the body is a
 # guess that a wide sway uncovers (a flat slab, a ghost of the hand). Gestures are variants and keep their reach.
-ARM_SWING = 0.6
+ARM_SWING = 0.4
 # An object held in both hands, or hands clasped: both arms (and shoulders) keep to this much, so neither hand leaves
 # it or the other.
 TWO_HANDED_SWING = 0.2
+# A hand on the face (a finger at the chin, a fist rubbing an eye): its arm keeps to this much, so the hand stays on
+# the face instead of uncovering a guess of it (a smear on the neck, a torn jaw).
+FACE_HAND_SWING = 0.05
 # Parameters a `swing` hint may not scale: a variant's lead turns the old arm by Lift and Bend toward the new one.
 UNSCALED = ("Lift.", "Bend.", "Var.")
-# Turns of the back hair and of a lock or braid over the body at ±1, in degrees per segment: what they hide is a
-# guess (flat, with stair-stepped edges), so they swing no farther than a lively sway needs (they were 14/12, 20/24).
+# Turns of the back hair and of a lock or braid at ±1, in degrees per segment: what they hide is a guess, so they
+# swing no farther than a lively sway needs (they were 14/12, 20/24).
 HAIR_BACK = (10.0, 9.0)
 HAIR_LOCK = (12.0, 14.0)
+# A lock or braid turns less by LOCK_ON_BODY times the share of it lying on the body rather than over the stage: a braid
+# resting on the chest hardly swings, and what it hides of the clothes (a bow under its end) is a guess.
+LOCK_ON_BODY = 1.0
+# A blink brings the upper lash down by LID_DROP of the eye's height and thins it by LID_THIN, so the closed eye is a
+# line of ink; the whites and irides close up to the eye's pivot (squashed whole, the lash thinned to nothing).
+LID_DROP, LID_THIN = 0.45, -0.35
 # How far the irises travel at EyeBall ±1, in face widths: a small glance, never sliding off to show the white.
 IRIS_TRAVEL = (0.017, 0.009)
 POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.17, 0.08
@@ -48,6 +57,16 @@ def drive(pid, bone, channel, keys):
 
 def linear(pid, bone, channel, amount):
     return drive(pid, bone, channel, [(-1, -amount), (1, amount)])
+
+
+def arm_share(lm, side):
+    """How much of its range an arm's own sway covers: ARM_SWING, less for both hands on one object or clasped, a hand
+    on the face, or the hand holding an object."""
+    if lm.get("twoHanded"):
+        return ARM_SWING * TWO_HANDED_SWING
+    if side in lm.get("faceHands", ()):
+        return ARM_SWING * FACE_HAND_SWING
+    return ARM_SWING * (HELD_SWING if side == lm.get("objectSide") else 1.0)
 
 
 def build(lm, bone_names, tail_swing=1.0, swing=None):
@@ -103,18 +122,21 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     for side in ("left", "right"):
         if has(f"shoulder.{side}"):
             params.append(param(f"Shoulder.{side}"))
-            together = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else 1.0)
+            together = arm_share(lm, side) if lm.get("twoHanded") or side in lm.get("faceHands", ()) else ARM_SWING
             drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw * together))
         if has(f"eye.{side}"):
             drivers.append(drive(f"EyeOpen.{side}", f"eye.{side}", "scaleY", [(0, -0.9), (1, 0)]))
+        if has(f"lid.{side}") and side in lm.get("eyes", {}):
+            _, y0, _, y1 = lm["eyes"][side]["box"]
+            drivers.append(drive(f"EyeOpen.{side}", f"lid.{side}", "y", [(0, LID_DROP * (y1 - y0)), (1, 0)]))
+            drivers.append(drive(f"EyeOpen.{side}", f"lid.{side}", "scaleY", [(0, LID_THIN), (1, 0)]))
             drivers.append(linear("EyeBallX", f"iris.{side}", "x", IRIS_TRAVEL[0] * fw))
             drivers.append(linear("EyeBallY", f"iris.{side}", "y", IRIS_TRAVEL[1] * fw))
 
     physics = []
     for side, (upper, lower) in ARM_RANGES.items():
         if has(f"arm.{side}"):
-            held = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else
-                                HELD_SWING if side == lm.get("objectSide") else 1.0)
+            held = arm_share(lm, side)
             params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}"), param(f"Bend.{side}")]
             drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper * held))
             drivers.append(linear(f"Lift.{side}", f"arm.{side}", "rotate", LIFT_RANGE))
@@ -126,8 +148,7 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
             fist = hand["open"] < FIST
             params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.1 if fist else -0.5, 0.1 if fist else 1.0)]
             params += [param(f"Finger.{side}.{i}", -0.08 if fist else -0.4, 0.12 if fist else 1.0) for i in range(5)]
-            held = ARM_SWING * (TWO_HANDED_SWING if lm.get("twoHanded") else
-                                HELD_SWING if side == lm.get("objectSide") else 1.0)
+            held = arm_share(lm, side)
             for d in hand_drivers(side, hand):
                 if d["param"] == f"Wrist.{side}":
                     d["keys"] = [[k, v * held] for k, v in d["keys"]]
@@ -143,8 +164,9 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
     if has("lock1"):
         lk = lm["lock"]
         params += [param("HairLock1"), param("HairLock2")]
-        drivers += [linear("HairLock1", "lock1", "rotate", -HAIR_LOCK[0]),
-                    linear("HairLock2", "lock2", "rotate", -HAIR_LOCK[1])]
+        resting = 1 - LOCK_ON_BODY * float(lm.get("lockOnBody", 0.0))
+        drivers += [linear("HairLock1", "lock1", "rotate", -HAIR_LOCK[0] * resting),
+                    linear("HairLock2", "lock2", "rotate", -HAIR_LOCK[1] * resting)]
         physics.append(chain("lock", lk["root"], [lk["mid"][1] - lk["root"][1], lk["end"] - lk["mid"][1]],
                              ["HairLock1", "HairLock2"], list(HAIR_LOCK), fw, stiffness=20, damping=5.0, wind=1.25))
     if has("skirtHem"):

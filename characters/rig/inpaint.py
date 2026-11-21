@@ -21,6 +21,10 @@ MIN_PX = 40
 MARGIN, MAX_SIDE = 32, 1024
 # The mask reaches EDGE px past the hidden pixels, over the soft rim of the parts above, which carries their colors.
 EDGE = 3
+# Past the layer's outline the crop holds the layer's mean color, which LaMa would take for paint (a strip hidden along
+# the outline, under a lock of hair, faded to grey): within OUTSIDE px of the hidden pixels it is masked as well, so the
+# strip continues the paint beside it.
+OUTSIDE = 24
 THREADS = 4
 
 
@@ -74,6 +78,7 @@ def repaint_hidden(layers, model_path, skip=L.NO_GROWTH):
         backdrop = rgb[shown].mean(axis=0) if shown.any() else rgb[solid[box]].mean(axis=0)
         image = rgb * alpha + backdrop * (1 - alpha)
         mask = ndimage.binary_dilation(hidden[box], iterations=EDGE) & solid[box]
+        mask |= ndimage.binary_dilation(hidden[box], iterations=OUTSIDE) & ~solid[box]
         layer.rgba[box][..., :3] = np.where(hidden[box][..., None], lama(image, mask, model_path), rgb)
         total += int(hidden.sum())
     return total

@@ -185,6 +185,12 @@ def landmarks(layers, torso=None):
     return lm
 
 
+def lid_pivot(eye):
+    """Where the upper lash turns and thins on a blink: a quarter down the eye's box, on its pivot's column."""
+    x0, y0, x1, y1 = eye["box"]
+    return (eye["pivot"][0], y0 + 0.25 * (y1 - y0))
+
+
 def bones(lm):
     fx0, fy0, fx1, fy1 = lm["face"]
     face_c = ((fx0 + fx1) / 2, (fy0 + fy1) / 2)
@@ -206,6 +212,7 @@ def bones(lm):
     for side, eye in lm["eyes"].items():
         out.append(Bone(f"eye.{side}", "features", eye["pivot"]))
         out.append(Bone(f"iris.{side}", f"eye.{side}", eye["pivot"]))
+        out.append(Bone(f"lid.{side}", "features", lid_pivot(eye)))
     if "backHair" in lm:
         out.append(Bone("hairBack1", "chest", lm["backHair"]["root"]))
         out.append(Bone("hairBack2", "hairBack1", lm["backHair"]["mid"]))
@@ -233,6 +240,12 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
     chin = lm["chin"]
     one = np.ones(len(vertices))
 
+    if tag == "eyelash" and side and side in lm["eyes"]:
+        # The upper lash rides the lid down on a blink, keeping its ink; the lower lash closes up with the eye.
+        x0, y0, x1, y1 = lm["eyes"][side]["box"]
+        py = lm["eyes"][side]["pivot"][1]
+        upper = 1 - smoothstep(py - 0.12 * (y1 - y0), py + 0.08 * (y1 - y0), y)
+        return [(f"lid.{side}", upper), (f"eye.{side}", 1 - upper)]
     if tag in ("eyewhite", "eyelash") and side:
         return [(f"eye.{side}", one)]
     if tag == "irides" and side:
@@ -276,9 +289,12 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
         return skirt_weights(y, lm, face_h)
     if tag in ("footwear", "legwear") and "foot" in lm:
         return [("foot", one)]
-    if tag == "topwear":
+    if tag == "topwear" and lm.get("rigidLower"):
         w_low = _below_waist(y, lm, face_h)
         return [("chest", 1 - w_low), ("lower", w_low)]
+    if tag == "topwear":
+        # A dress's skirt drawn into the top swings with the skirt drawn over it, so the two never tear apart.
+        return skirt_weights(y, lm, face_h)
     if tag in ("neckwear", "wings", "tail", "objects", "handwear"):
         return [("chest", one)]
     if tag == "bottomwear":

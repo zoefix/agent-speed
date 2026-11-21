@@ -156,7 +156,7 @@ class FillHiddenTests(unittest.TestCase):
         from characters.rig.skeleton import weights_by_owner
         tags = np.full((40, 40), "topwear", object)
         tags[:, 20:] = "face"
-        lm = {"face": (0, 0, 10, 10), "chin": 10, "waist": (20, 30)}
+        lm = {"face": (0, 0, 10, 10), "chin": 10, "waist": (20, 30), "hem": 40}
         influences = dict(weights_by_owner(np.array([[5.0, 5.0], [30.0, 5.0]]), tags.astype(str), lm))
         np.testing.assert_allclose(influences["chest"], [1, 0])
         np.testing.assert_allclose(influences["face"], [0, 1])
@@ -300,6 +300,27 @@ class HandTests(unittest.TestCase):
         self.assertEqual(part.alpha[60, 50], 1)
         self.assertEqual(arm.alpha[170, 50], 1)
         self.assertEqual(part.alpha[170, 50], 0)
+
+    def test_a_thin_crease_and_a_white_pinhole_go_with_the_hand(self):
+        from characters.rig import hands
+        from characters.rig.layers import Layer
+        h = self.hand()
+        rgba = np.zeros((200, 200, 4), np.float32)
+        rgba[40:180, 25:75] = (0.9, 0.7, 0.6, 1)
+        reference = np.ones((200, 200, 3), np.float32)
+        reference[40:180, 25:75] = (0.9, 0.7, 0.6)
+        reference[70:72, 60:75] = (0.8, 0.65, 0.6)
+        mask = np.zeros((200, 200), bool)
+        mask[45:100, 25:75] = True
+        mask[70:72, 60:75] = False
+        rgba[60:63, 40:43, 3] = 0
+        reference[60:63, 40:43] = 1
+        mask[60:63, 40:43] = False
+        arm, part = hands.split(Layer("handwear.right", "handwear", rgba, "right"), h, mask, reference)
+        self.assertEqual(part.alpha[71, 68], 1)
+        self.assertEqual(arm.alpha[71, 68], 0)
+        self.assertEqual(part.alpha[61, 41], 1)
+        np.testing.assert_allclose(part.rgba[61, 41, :3], 1)
 
     def test_finger_curl_turns_toward_the_palm(self):
         from characters.rig.params import hand_drivers
@@ -844,6 +865,30 @@ class WaistTests(unittest.TestCase):
         self.assertGreater(weights["skirtHem"][3], 0.99)
 
 
+    def test_a_dress_drawn_into_the_top_swings_with_the_skirt(self):
+        from characters.rig.layers import Layer
+        from characters.rig.skeleton import weights_for
+        lm = {"face": (40, 0, 60, 20), "chin": 20.0, "waist": (50, 100), "hem": 200, "skirtMid": 145}
+        top = Layer("topwear", "topwear", np.zeros((4, 4, 4), np.float32))
+        weights = dict(weights_for(top, np.array([[50.0, 60.0], [50.0, 195.0]]), lm))
+        self.assertGreater(weights["chest"][0], 0.99)
+        self.assertGreater(weights["skirtHem"][1], 0.9)
+
+    def test_the_upper_lash_rides_the_lid_down_on_a_blink(self):
+        from characters.rig import params
+        from characters.rig.layers import Layer
+        from characters.rig.skeleton import weights_for
+        eye = {"box": (40, 40, 80, 80), "pivot": (60, 64.8)}
+        lm = {"face": (0, 0, 120, 140), "chin": 140.0, "eyes": {"left": eye}}
+        lash = Layer("eyelash.left", "eyelash", np.zeros((4, 4, 4), np.float32), "left")
+        weights = dict(weights_for(lash, np.array([[60.0, 44.0], [60.0, 78.0]]), lm))
+        np.testing.assert_allclose(weights["lid.left"], [1, 0])
+        np.testing.assert_allclose(weights["eye.left"], [0, 1])
+        _, drivers, _ = params.build({"faceWidth": 100.0, "eyes": {"left": eye}}, ["eye.left", "lid.left"])
+        drop = next(d for d in drivers if d["bone"] == "lid.left" and d["channel"] == "y")
+        self.assertEqual(drop["param"], "EyeOpen.left")
+        self.assertAlmostEqual(drop["keys"][0][1], params.LID_DROP * 40)
+
     def test_no_foot_bone_when_one_foot_is_kicked_up(self):
         from characters.rig.layers import Layer
         from characters.rig.skeleton import _one_foot_raised
@@ -1112,6 +1157,15 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[25, 100], 1.0)
         self.assertEqual(hair.alpha[90, 170], 1.0)
 
+    def test_back_hair_far_under_a_long_sleeve_goes_too(self):
+        from characters.rig.layers import back_hair_alone
+        hair = self.layer("back hair", (0.6, 0.3, 0.1), (10, 190, 10, 190))
+        top = self.layer("topwear", (0.9, 0.9, 0.9), (180, 190, 90, 110))
+        sleeve = self.layer("handwear", (0.9, 0.9, 0.9), (20, 180, 20, 180))
+        back_hair_alone([hair, top, sleeve])
+        self.assertEqual(hair.alpha[100, 100], 0.0)
+        self.assertEqual(hair.alpha[100, 30], 1.0)
+
     def test_a_bit_of_hair_seen_between_the_wing_spars_flaps_with_the_wing_instead_of_floating(self):
         from characters.rig.layers import composite, wings_alone
         hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
@@ -1193,6 +1247,28 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[90, 75], 1.0)
         self.assertEqual(hair.alpha[90, 30], 0.0)
 
+    def test_an_earring_over_the_locks_is_drawn_above_them(self):
+        from characters.rig.layers import earrings_over_hair
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 60:100] = (0.8, 0.4, 0.1)
+        ref[90:130, 70:80] = (0.9, 0.8, 0.2)
+        ear = self.layer("earwear", (0.9, 0.8, 0.2), (90, 130, 70, 80))
+        hair = self.layer("front hair", (0.8, 0.4, 0.1), (40, 160, 60, 100))
+        hair.rgba[90:130, 70:80, :3] = (0.9, 0.8, 0.2)
+        parts, moved = earrings_over_hair([ear, hair], ref)
+        self.assertEqual([q.name for q in parts], ["front hair", "earwear"])
+        self.assertEqual(moved, 400)
+
+    def test_an_earring_behind_the_locks_stays_under_them(self):
+        from characters.rig.layers import earrings_over_hair
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 60:100] = (0.8, 0.4, 0.1)
+        ear = self.layer("earwear", (0.9, 0.8, 0.2), (90, 130, 70, 80))
+        hair = self.layer("front hair", (0.8, 0.4, 0.1), (40, 160, 60, 100))
+        parts, moved = earrings_over_hair([ear, hair], ref)
+        self.assertEqual([q.name for q in parts], ["earwear", "front hair"])
+        self.assertEqual(moved, 0)
+
     def test_a_layer_grows_far_only_under_still_parts(self):
         from characters.rig.layers import grow_underlays
         torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 100))
@@ -1202,6 +1278,14 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(torso.alpha[100, 108], 1.0)
         self.assertEqual(torso.alpha[70, 38], 1.0)
         self.assertEqual(torso.alpha[70, 30], 0.0)
+
+    def test_back_hair_grows_only_a_seam_under_the_body(self):
+        from characters.rig.layers import grow_underlays
+        hair = self.layer("back hair", (0.5, 0.3, 0.1), (40, 160, 40, 70))
+        torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 60, 120))
+        grow_underlays([hair, torso])
+        self.assertEqual(hair.alpha[100, 72], 1.0)
+        self.assertEqual(hair.alpha[100, 76], 0.0)
 
     def test_a_plume_on_the_hat_taken_for_tail_goes_to_the_hat(self):
         from characters.rig.layers import tail_off_head
@@ -1389,6 +1473,53 @@ class ClaspedHandTests(unittest.TestCase):
             keys = {d["param"]: d["keys"][-1][1] for d in drivers}
             self.assertAlmostEqual(keys["Shoulder.left"], -7.0 * factor)
             self.assertAlmostEqual(keys["Arm.left"], params.ARM_RANGES["left"][0] * factor)
+
+
+class FaceHandTests(unittest.TestCase):
+    def test_a_hand_on_the_face_counts_and_one_beside_it_does_not(self):
+        from characters.rig.build import hands_at_face
+        from characters.rig.layers import Layer
+        face = np.zeros((100, 100, 4), np.float32)
+        face[20:60, 30:70] = 1
+        hands = []
+        for side, x0 in (("left", 60), ("right", 75)):
+            rgba = np.zeros((100, 100, 4), np.float32)
+            rgba[40:60, x0:x0 + 20] = 1
+            hands.append(Layer(f"hand.{side}", "hand", rgba, side))
+        self.assertEqual(hands_at_face([Layer("face", "face", face)] + hands), ["left"])
+
+    def test_the_arm_of_a_hand_on_the_face_keeps_still(self):
+        from characters.rig import params
+        names = ["shoulder.right", "arm.right", "forearm.right", "shoulder.left", "arm.left"]
+        _, drivers, _ = params.build({"faceWidth": 100.0, "faceHands": ["right"]}, names)
+        keys = {d["param"]: d["keys"][-1][1] for d in drivers}
+        still = params.ARM_SWING * params.FACE_HAND_SWING
+        self.assertAlmostEqual(keys["Arm.right"], params.ARM_RANGES["right"][0] * still)
+        self.assertAlmostEqual(keys["Shoulder.right"], -7.0 * still)
+        self.assertAlmostEqual(keys["Arm.left"], params.ARM_RANGES["left"][0] * params.ARM_SWING)
+
+
+class LockOnBodyTests(unittest.TestCase):
+    def test_a_lock_on_the_body_swings_less(self):
+        from characters.rig import params
+        for share in (0.0, 1.0):
+            _, drivers, _ = params.build({"faceWidth": 100.0, "lockOnBody": share,
+                                          "lock": {"root": (50, 10), "mid": (50, 40), "end": 80.0}}, ["lock1", "lock2"])
+            keys = {d["param"]: d["keys"][-1][1] for d in drivers}
+            self.assertAlmostEqual(keys["HairLock2"], -params.HAIR_LOCK[1] * (1 - params.LOCK_ON_BODY * share))
+
+    def test_the_share_counts_the_lock_over_the_body_not_over_the_back_hair(self):
+        from characters.rig.build import lock_on_body
+        from characters.rig.layers import Layer
+
+        def layer(name, tag, box):
+            rgba = np.zeros((100, 100, 4), np.float32)
+            y0, y1, x0, x1 = box
+            rgba[y0:y1, x0:x1] = 1
+            return Layer(name, tag, rgba)
+        parts = [layer("back hair", "back hair", (0, 100, 0, 100)), layer("topwear", "topwear", (0, 100, 40, 60)),
+                 layer("front hair", "front hair", (0, 100, 50, 70))]
+        self.assertAlmostEqual(lock_on_body(parts, {"face": (40, 0, 60, 20), "chin": 20.0}), 0.5)
 
 
 class PropHintTests(unittest.TestCase):

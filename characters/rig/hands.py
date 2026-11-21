@@ -9,6 +9,10 @@ from scipy import ndimage
 
 from .layers import Layer
 
+# Creases between curled fingers up to twice this many px wide close into the hand (split), and so do enclosed white
+# pinholes up to (PINHOLE x the hand's size) squared px (at least PINHOLE_MIN).
+CREASE = 2
+PINHOLE, PINHOLE_MIN = 0.1, 12
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 CURL = (14.0, 20.0, 16.0)
 FIST = 1.35
@@ -93,24 +97,36 @@ def past_cut(shape, hand):
     return (xs - hand["wrist"][0]) * u[0] + (ys - hand["wrist"][1]) * u[1] > -0.12 * hand["size"]
 
 
-def split(layer, hand, mask=None, reference=None):
+def split(layer, hand, mask=None, reference=None, holds=True):
     """(arm layer, hand layer). With a precise `mask` and the original art the hand part is exactly the drawn hand
     plus the ink line around it (SAM stops inside the outline), keeping the arm layer's own colors and soft edge where
     it has them and never the paper behind the art; without, it is the arm layer near the hand bones. The cut sits just before the wrist and the hand part reaches
-    4 px back over the arm, so no seam opens between them."""
+    4 px back over the arm, so no seam opens between them. A hand that `holds` nothing (no object layer touches it)
+    keeps all it encloses: the dark hollow of an empty fist is not a held object."""
     shape = layer.alpha.shape
     past = past_cut(shape, hand)
     held_area = np.zeros(shape, bool)
     if mask is not None and reference is not None:
         ink = reference @ np.array([0.299, 0.587, 0.114], np.float32) < 0.6
         outline = ndimage.binary_dilation(mask, iterations=4) & ink
-        inside = ndimage.binary_fill_holes(mask | outline) & past
+        # A crease between curled fingers open to the outside by a thin channel is the hand's too: left on the arm,
+        # it stayed behind as slivers and teal pinholes once the wrist turned (paper in it is taken out below).
+        drawn = mask | outline
+        inside = ndimage.binary_fill_holes(drawn | ndimage.binary_closing(drawn, iterations=CREASE)) & past
         # Filling the outline must not take in a held object (a flute between parted fingers and the palm, or across
         # the fingers): thick areas outside SAM's hand or off the hand's hue stay with the layer that drew them.
-        held_area = held(inside & ~mask | off_hue(reference, inside, mask), hand["size"])
+        if holds:
+            held_area = held(inside & ~mask | off_hue(reference, inside, mask), hand["size"])
         paper = (reference.min(axis=2) > 0.975) & (layer.alpha < 0.5)
         inside = (inside | (ndimage.binary_dilation(inside & ~held_area, iterations=2) & past & (layer.alpha > 0.01)))
         inside &= ~paper & ~held_area
+        # A pinhole of white the hand encloses (a highlight in a fist's crease the matte took for paper) is the hand's:
+        # left out, it showed whatever lay behind once the wrist turned, teal at worst.
+        pockets, count = ndimage.label(ndimage.binary_fill_holes(inside) & ~inside & ~held_area)
+        if count:
+            sizes = np.asarray(ndimage.sum(pockets > 0, pockets, range(1, count + 1)))
+            small = 1 + np.flatnonzero(sizes <= max(PINHOLE_MIN, (PINHOLE * hand["size"]) ** 2))
+            inside |= np.isin(pockets, small)
         rim = inside & ndimage.binary_dilation(reference.min(axis=2) > 0.975, iterations=1) & (layer.alpha > 0.05)
         part = np.zeros_like(layer.rgba)
         part[..., :3] = np.where(rim[..., None], layer.rgba[..., :3], reference)

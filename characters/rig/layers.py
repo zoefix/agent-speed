@@ -452,6 +452,36 @@ def arms_over_face(layers, reference, min_px=30, off=0.06, margin=0.05, bridge=8
     return layers, taken
 
 
+def earrings_over_hair(layers, reference, min_px=30, margin=0.02, share=0.6):
+    """Draws an earring the art shows over the side locks above the front hair: See-Through paints it into the earwear
+    and copies it, roughly, into the front hair over it, and a turn of the head moves the two apart (a doubled
+    earring). When the earwear's paint is as near the art as the hair's (median mean channel difference, within
+    `margin`) on pieces of its overlap with the front hair holding `share` of it, at least `min_px`, it goes right
+    above the front hair and keeps none of the other pieces, where the art shows the hair; the copy in the hair is
+    then hidden, and repainted. Returns the layers and the pixels moved."""
+    moved = 0
+    for ear in [layer for layer in layers if layer.tag == "earwear"]:
+        hairs = [layer for layer in layers[layers.index(ear) + 1:] if layer.tag == "front hair"]
+        if not hairs:
+            continue
+        overlap = (ear.alpha > 0.5) & (coverage(hairs) > 0.5)
+        if overlap.sum() < min_px:
+            continue
+        hair = coverage(hairs)
+        ear_off = np.abs(ear.rgba[..., :3] - reference).mean(axis=2)
+        hair_off = np.abs(composite(hairs, background=0.0) / np.maximum(hair, 1e-6)[..., None] - reference).mean(axis=2)
+        labels, count = ndimage.label(overlap, structure=np.ones((3, 3)))
+        front = np.isin(labels, [k for k in range(1, count + 1)
+                                 if np.median(ear_off[labels == k]) <= np.median(hair_off[labels == k]) + margin])
+        if front.sum() < share * overlap.sum():
+            continue
+        ear.rgba[..., 3] = np.where(overlap & ~front, 0.0, ear.alpha)
+        layers.remove(ear)
+        layers.insert(max(layers.index(hair) for hair in hairs) + 1, ear)
+        moved += int(front.sum())
+    return layers, moved
+
+
 def objects_over_face(layers, min_px=30):
     """Where a held object overlaps the face (a flute's lip plate at the lips; See-Through often paints it into the
     face layer as well): an object is never behind the face, so the face keeps what the art shows there and face
@@ -647,13 +677,15 @@ def wings_alone(layers, reach=6, island=0.05, enclosed=0.6):
 BODY_TAGS = ("neck", "topwear", "neckwear", "bottomwear", "legwear", "footwear")
 
 
-def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6):
+def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6, moving_reach=40):
     """Leaves the back hair only near where it shows: See-Through paints a whole sheet of it behind the body (flat,
     with the gaps between curls drawn as outlines), and LaMa repaints it flat; once the hair swings out past the body
     that sheet shows as a slab. Back hair the body's clothes (`BODY_TAGS`) cover by `cover`, more than `reach` px from
     where the back hair shows, goes, fading out over the last half of that reach (no straight cut edge once it swings
-    out): the swing uncovers the stage behind, as between the strands. What arms, hands, objects or the front hair
-    cover stays, since their own moves uncover it. A bit of it then cut off from the rest (under `island` of its
+    out): the swing uncovers the stage behind, as between the strands. What arms, hands, objects, the head or the
+    front hair cover stays within `moving_reach` px, as far as their own small sways uncover it (a gesture shows the
+    variant's art there instead), fading out likewise: a long sleeve held out hid a whole sheet of it, a grey ghost
+    once the hair swung. A bit of it then cut off from the rest (under `island` of its
     largest piece), seen through a gap in the clothes that frame it (`enclosed` of its rim), would float once the hair
     swings: it goes into the clothing layer framing it most and keeps still with it (the rest pose stays the same).
     Returns the pixels cleared."""
@@ -668,10 +700,12 @@ def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6):
         if not shown.any():
             continue
         behind = solid & (coverage(body) > cover)
+        under = solid & ~behind & (coverage(above) > cover)
         dist = ndimage.distance_transform_edt(~shown)
         fade = np.clip((reach - dist) / (reach / 2), 0, 1).astype(np.float32)
-        hair.rgba[..., 3] = np.where(behind, hair.alpha * fade, hair.alpha)
-        cleared += int((behind & (dist > reach)).sum())
+        far = np.clip((moving_reach - dist) / (moving_reach / 2), 0, 1).astype(np.float32)
+        hair.rgba[..., 3] = np.where(behind, hair.alpha * fade, np.where(under, hair.alpha * far, hair.alpha))
+        cleared += int((behind & (dist > reach)).sum() + (under & (dist > moving_reach)).sum())
         _islands_to(hair, layers, body, island, enclosed)
     return cleared
 
@@ -1096,11 +1130,17 @@ def back_tail_root(layers, root, reach, band=25, rim=3, pad=4):
     return filled
 
 
-def grow_underlays(layers, radius=10, seam=3, swinging=RIM_TAGS):
+# Layers drawn behind the body: a gap in the body over them is still a gap in the body.
+BEHIND_TAGS = ("back hair", "tail", "wings")
+
+
+def grow_underlays(layers, radius=10, seam=3, swinging=RIM_TAGS, swaying=BEHIND_TAGS):
     """Extends each layer under the opaque layers above it, so the seams between still parts never open. Under parts
     that swing away (arms, hands, objects, the bangs and locks, tails, wings) only by `seam` px, enough to back their
     soft edge: more would show as a tab of the layer past its outline once the part moved (the face under a finger
-    below the jaw); a real gap under them is fill_enclosed_under's."""
+    below the jaw); a real gap under them is fill_enclosed_under's. Layers that sway on their own behind the body
+    (back hair, tails, wings) grow only by `seam` px under anything: the rest swings out past the body's outline as
+    a flat band around the hair."""
     for i, layer in enumerate(layers):
         if layer.tag in NO_GROWTH or i == len(layers) - 1:
             continue
@@ -1109,7 +1149,7 @@ def grow_underlays(layers, radius=10, seam=3, swinging=RIM_TAGS):
         solid = layer.alpha > 0.5
         if not solid.any():
             continue
-        grow = ndimage.binary_dilation(solid, iterations=radius) & above & ~solid
+        grow = ndimage.binary_dilation(solid, iterations=seam if layer.tag in swaying else radius) & above & ~solid
         grow &= steady | ndimage.binary_dilation(solid, iterations=seam)
         if not grow.any():
             continue
@@ -1119,8 +1159,6 @@ def grow_underlays(layers, radius=10, seam=3, swinging=RIM_TAGS):
 
 
 MOVING_TAGS = ("handwear", "hand", "objects", "front hair", "tail")
-# Layers drawn behind the body: a gap in the body over them is still a gap in the body.
-BEHIND_TAGS = ("back hair", "tail", "wings")
 
 
 def _between(mask, reach):
