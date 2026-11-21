@@ -243,30 +243,37 @@ def clear_ghosts(parts, mask, keep):
 
 
 INK = 0.45
+# Layers that draw over the hand what it touches on the head: the front hair, a headphone's cup (which the split may
+# also call ears), a hat's brim.
+OVER_HAND = ("front hair", "earwear", "headwear", "ears")
 
 
-def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2):
-    """Bits of the hand that the front hair took (knuckles seen between strands crossing the hand): front hair pixels
+def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2, tone=None, over=OVER_HAND):
+    """Bits of the hand that the front hair took (knuckles seen between strands crossing the hand, or fingertips on a
+    headphone's cup: any OVER_HAND layer): front hair pixels
     within `reach` px of the hand's mask whose hue is nearer the hand's than the hair's around them (and within `far`
     of the hand's, as off_hue), and their dark outline next to them (under INK luminance, nearer the hand's ink than
     the hair's), in pieces under `piece` of the mask's area, go to the hand part, composited as they showed. Layers
     between the two give those pixels up where the hair hid them at rest. A gesture replacing the hand then takes them
-    along instead of leaving them in the hair, and a sway carries them. Returns the pixels moved."""
+    along instead of leaving them in the hair, and a sway carries them. Returns the pixels moved. For an arm whose
+    hand has no part of its own (the pose model missed it), `hand` is the arm layer and `tone` the skin's hue."""
     i_hand = next((i for i, p in enumerate(parts) if p is hand), None)
     if i_hand is None or not mask.any():
         return 0
     near = ndimage.binary_dilation(mask, iterations=reach)
     ring = ndimage.binary_dilation(near, iterations=3 * reach) & ~near
     skin = (hand.alpha > 0.9) & mask
-    if skin.sum() < 50:
-        return 0
-    tone = np.median(_chroma(hand.rgba[..., :3])[skin], axis=0)
-    luma = hand.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
-    lines = (hand.alpha > 0.5) & ndimage.binary_dilation(mask, iterations=2) & (luma < INK)
-    ink = np.median(_chroma(hand.rgba[..., :3])[lines], axis=0) if lines.sum() >= 20 else None
+    ink = None
+    if tone is None:
+        if skin.sum() < 50:
+            return 0
+        tone = np.median(_chroma(hand.rgba[..., :3])[skin], axis=0)
+        luma = hand.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)
+        lines = (hand.alpha > 0.5) & ndimage.binary_dilation(mask, iterations=2) & (luma < INK)
+        ink = np.median(_chroma(hand.rgba[..., :3])[lines], axis=0) if lines.sum() >= 20 else None
     moved = 0
     for i, hair in enumerate(parts):
-        if hair.tag != "front hair" or i < i_hand:
+        if hair.tag not in over or i < i_hand:
             continue
         around = (hair.alpha > 0.9) & ring
         if around.sum() < 50:

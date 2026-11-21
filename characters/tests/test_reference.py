@@ -1404,6 +1404,17 @@ class TailCopyTests(unittest.TestCase):
         self.assertAlmostEqual(float(tail.rgba[60, 100, 0]), 0.3, places=5)
         self.assertEqual(tail.alpha[100, 150], 0.0)
 
+    def test_a_stretch_of_the_tail_hidden_under_a_sleeve_joins_its_two_pieces(self):
+        from characters.rig.layers import seal_tail
+        ref = np.full((200, 200, 3), 0.6, np.float32)
+        tail = self.layer("tail", (0.3, 0.3, 0.3), (80, 120, 20, 180))
+        tail.rgba[80:120, 80:130, 3] = 0.0
+        sleeve = self.layer("handwear", (0.9, 0.9, 0.9), (40, 160, 75, 135))
+        seal_tail([tail, sleeve], ref)
+        self.assertEqual(tail.alpha[100, 105], 1.0)
+        self.assertAlmostEqual(float(tail.rgba[100, 105, 0]), 0.3, places=2)
+        self.assertEqual(tail.alpha[60, 105], 0.0)
+
     def test_a_copy_of_the_tail_in_the_back_hair_goes_and_a_tail_behind_the_skirt_stays(self):
         from characters.rig.layers import tail_alone
         ref = np.ones((200, 200, 3), np.float32)

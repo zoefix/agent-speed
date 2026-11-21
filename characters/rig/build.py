@@ -99,6 +99,17 @@ def split_hands(parts, found, reference, sam):
         moved = hands.bits_in_hair(out, part, mask) if part is not None else 0
         if moved:
             print(f"hand {side}: {moved} px of it the front hair drew moved to the hand")
+    # An arm whose hand has no part (the pose model missed it) takes back fingertips a headphone or a hat drew beside
+    # it too, judged by the face's skin (not from the hair: skin between strands there is the shoulder's).
+    face = next((p for p in out if p.tag == "face"), None)
+    if face is not None and (face.alpha > 0.9).sum() >= 50:
+        tone = np.median(hands._chroma(face.rgba[..., :3])[face.alpha > 0.9], axis=0)
+        for arm in [p for p in out if p.tag == "handwear" and p.side in ("left", "right")]:
+            if any(p.tag == "hand" and p.side == arm.side for p in out):
+                continue
+            moved = hands.bits_in_hair(out, arm, arm.alpha > 0.5, tone=tone, over=("earwear", "headwear", "ears"))
+            if moved:
+                print(f"arm {arm.side}: {moved} px of its hand drawn over the head moved to the arm")
     return out, found
 
 

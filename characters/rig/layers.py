@@ -652,7 +652,23 @@ def tail_from_back_hair(layers, mask, reach=3, min_px=500):
     return int(piece.sum())
 
 
-def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
+def _close(mask, radius):
+    """`mask` closed by a disk of `radius` px (by distances, so a wide disk stays fast), holes filled."""
+    if not mask.any():
+        return mask
+    ys, xs = np.nonzero(mask)
+    pad = radius + 2
+    y0, x0 = max(ys.min() - pad, 0), max(xs.min() - pad, 0)
+    y1, x1 = min(ys.max() + pad + 1, mask.shape[0]), min(xs.max() + pad + 1, mask.shape[1])
+    crop = np.pad(mask[y0:y1, x0:x1], pad)
+    grown = ndimage.distance_transform_edt(~crop) <= radius
+    closed = ndimage.distance_transform_edt(grown) > radius
+    out = np.zeros_like(mask)
+    out[y0:y1, x0:x1] = ndimage.binary_fill_holes(closed | crop)[pad:-pad, pad:-pad]
+    return out
+
+
+def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None, hidden_notch=40):
     """Makes the tail whole where it shows. The pieces it was stitched from (a recovered base, a piece from the hair)
     meet with soft edges and leave notches between them, which show the backdrop as a crack once the tail swings over
     it. Notches up to about 2 * `notch` px across (the tail's outline closed by a disk of radius `notch`) are filled
@@ -660,7 +676,8 @@ def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
     tufts of a furry outline, which would stay on the tail as white specks; then the tail is opaque inside its outline
     (eroded by `core` px).
     What layers drawn over it hide keeps its opacity (See-Through's guess there would show as a slab once the tail
-    swings out) but takes a blur of the tail that shows, `rim` px inside its outline, so it is no dark band either."""
+    swings out) but takes a blur of the tail that shows, `rim` px inside its outline, so it is no dark band either;
+    a gap they hide between two pieces of the tail (closed by a disk of radius `hidden_notch`) joins the tail so."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
     if index is None:
         return
@@ -675,6 +692,10 @@ def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
         gap &= ~paper
     tail.rgba[..., :3] = np.where(gap[..., None], reference, tail.rgba[..., :3])
     tail.rgba[..., 3] = np.where(gap, 1.0, tail.alpha)
+    # A stretch of the tail hidden under a sleeve or the skirt See-Through left out splits it in two, which part
+    # once the tail swings or the sleeve moves off: gaps up to 2 * `hidden_notch` px there take the tail's blur below.
+    bridge = _close(tail.alpha > 0.5, hidden_notch) & ~(tail.alpha > 0.5) & hidden
+    tail.rgba[..., 3] = np.where(bridge, 1.0, tail.alpha)
     inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
     tail.rgba[..., 3] = np.where(inside & ~hidden, 1.0, tail.alpha)
     # What the clothes hide of the tail is See-Through's guess, often dark; it shows once the tail swings out, so it
