@@ -146,7 +146,40 @@ def split(layer, hand, mask=None, reference=None, holds=True):
     part[..., 3] = np.where(band, layer.alpha, part[..., 3])
     arm = layer.rgba.copy()
     arm[..., 3] = np.where(inside, 0.0, arm[..., 3])
+    _line_cuff(arm, inside, hand["size"])
     return Layer(layer.name, layer.tag, arm, layer.side), Layer(f"hand.{hand['side']}", "hand", part, hand["side"])
+
+
+def _line_cuff(arm, inside, size, reach=0.3):
+    """Fills what the hand covered of its own sleeve's opening (within the convex hull of the sleeve's main piece up
+    to `reach` of the hand's size from the hand) with the sleeve's colors around it, opaque: once the hand turns or
+    sways, the cuff shows its lining instead of a hand-shaped hole to the stage. The hand covers it at rest."""
+    import cv2
+    from skimage.morphology import convex_hull_image
+    kept = arm[..., 3] > 0.5
+    if not (kept.any() and inside.any()):
+        return
+    r = max(3, int(reach * size))
+    ys, xs = np.nonzero(inside)
+    y0, y1 = max(ys.min() - 2 * r, 0), ys.max() + 2 * r + 1
+    x0, x1 = max(xs.min() - 2 * r, 0), xs.max() + 2 * r + 1
+    box = (slice(y0, y1), slice(x0, x1))
+    labels, count = ndimage.label(kept[box])
+    if not count:
+        return
+    main = labels == 1 + int(np.argmax(ndimage.sum(kept[box], labels, range(1, count + 1))))
+    near = main & ndimage.binary_dilation(inside[box], iterations=r)
+    if near.sum() < 3:
+        return
+    lining = convex_hull_image(near) & inside[box] & ~kept[box]
+    if not lining.any():
+        return
+    rgb = (np.clip(arm[box][..., :3], 0, 1) * 255).astype(np.uint8)
+    rgb[~kept[box]] = 0
+    fixed = cv2.inpaint(rgb, (~kept[box]).astype(np.uint8), 5, cv2.INPAINT_TELEA).astype(np.float32) / 255
+    view = arm[box]
+    view[..., :3] = np.where(lining[..., None], fixed, view[..., :3])
+    view[..., 3] = np.where(lining, 1.0, view[..., 3])
 
 
 def _chroma(rgb):

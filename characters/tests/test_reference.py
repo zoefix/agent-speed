@@ -318,7 +318,6 @@ class HandTests(unittest.TestCase):
         mask[60:63, 40:43] = False
         arm, part = hands.split(Layer("handwear.right", "handwear", rgba, "right"), h, mask, reference)
         self.assertEqual(part.alpha[71, 68], 1)
-        self.assertEqual(arm.alpha[71, 68], 0)
         self.assertEqual(part.alpha[61, 41], 1)
         np.testing.assert_allclose(part.rgba[61, 41, :3], 1)
 
@@ -1120,6 +1119,16 @@ class TailCopyTests(unittest.TestCase):
         self.assertTrue(np.allclose(hair.rgba[71, 100, :3], 0.1))
         self.assertTrue(np.allclose(lash.rgba[102, 95, :3], 0.1))
 
+    def test_a_lash_corner_joined_to_a_strand_outline_leaves_the_hair_but_the_outline_stays(self):
+        from characters.rig.layers import lashes_off_hair
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 104, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
+        hair.rgba[100:104, 90:100, :3] = 0.12
+        hair.rgba[62:104, 90:92, :3] = 0.12
+        lashes_off_hair([lash, hair])
+        self.assertTrue(np.allclose(hair.rgba[102, 96, :3], (0.6, 0.6, 0.9), atol=0.02))
+        self.assertTrue(np.allclose(hair.rgba[75, 91, :3], 0.12))
+
     def test_a_lash_tip_along_the_edge_of_the_bangs_is_painted_out_even_where_it_is_most_of_the_hair_near_it(self):
         from characters.rig.layers import lashes_off_hair
         lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 112, 80, 120))
@@ -1527,6 +1536,19 @@ class BodyHandTests(unittest.TestCase):
             parts += [Layer(f"handwear.{side}", "handwear", sleeve, side), Layer(f"hand.{side}", "hand", hand, side)]
         self.assertEqual(hands_on_body(parts), ["left"])
 
+    def test_a_long_sleeve_lying_on_the_coat_counts_though_its_hand_is_up_in_the_air(self):
+        from characters.rig.build import hands_on_body
+        from characters.rig.layers import Layer
+        coat = np.zeros((100, 100, 4), np.float32)
+        coat[20:100, 20:80] = 1
+        sleeve = np.zeros((100, 100, 4), np.float32)
+        sleeve[30:90, 50:75] = 1
+        hand = np.zeros((100, 100, 4), np.float32)
+        hand[5:20, 80:95] = 1
+        parts = [Layer("topwear", "topwear", coat), Layer("handwear.right", "handwear", sleeve, "right"),
+                 Layer("hand.right", "hand", hand, "right")]
+        self.assertEqual(hands_on_body(parts), ["right"])
+
     def test_the_arm_of_a_hand_on_the_body_sways_less(self):
         from characters.rig import params
         names = ["shoulder.right", "arm.right", "forearm.right", "shoulder.left", "arm.left"]
@@ -1536,6 +1558,18 @@ class BodyHandTests(unittest.TestCase):
         self.assertAlmostEqual(keys["Arm.right"], params.ARM_RANGES["right"][0] * still)
         self.assertAlmostEqual(keys["Shoulder.right"], -7.0 * still)
         self.assertAlmostEqual(keys["Arm.left"], params.ARM_RANGES["left"][0] * params.ARM_SWING)
+
+    def test_the_cuff_a_hand_came_out_of_is_lined_where_the_hand_covered_it(self):
+        from characters.rig.hands import _line_cuff
+        arm = np.zeros((100, 100, 4), np.float32)
+        arm[0:60, 20:60] = (0.3, 0.1, 0.4, 1.0)
+        inside = np.zeros((100, 100), bool)
+        inside[50:80, 30:50] = True
+        arm[..., 3] = np.where(inside, 0.0, arm[..., 3])
+        _line_cuff(arm, inside, 40)
+        self.assertEqual(arm[55, 40, 3], 1.0)
+        self.assertTrue(np.allclose(arm[55, 40, :3], (0.3, 0.1, 0.4), atol=0.02))
+        self.assertEqual(arm[70, 40, 3], 0.0)
 
     def test_the_other_sleeve_gives_up_the_hand_by_where_it_is_drawn(self):
         from characters.rig.hands import clear_ghosts

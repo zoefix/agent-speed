@@ -149,15 +149,16 @@ def hands_at_face(parts, min_px=30):
 
 
 def hands_on_body(parts, share=0.7):
-    """Sides whose hand lies over the other layers (the body, the clothes, an object, the hair) by `share` of it: what
-    it hides there is a guess, a smear or the old hand's outline once the hand sways off."""
+    """Sides whose hand, or whose whole arm, lies over the other layers (the body, the clothes, an object, the hair)
+    by `share` of it: what it hides there is a guess, a smear or the old hand's outline once the hand sways off, a
+    slab beside the coat once a long sleeve lying on it swings."""
     arms = ("hand", "handwear")
     under = layers.coverage([p for p in parts if p.tag not in arms]) > 0.5
     out = []
     for p in parts:
-        if p.tag == "hand" and p.side in ("left", "right"):
-            hand = p.alpha > 0.5
-            if hand.any() and float((hand & under).sum() / hand.sum()) >= share:
+        if p.tag in arms and p.side in ("left", "right"):
+            drawn = p.alpha > 0.5
+            if drawn.any() and float((drawn & under).sum() / drawn.sum()) >= share:
                 out.append(p.side)
     return sorted(set(out))
 

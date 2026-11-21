@@ -367,10 +367,10 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   wide sway uncovers. Gestures are variants and keep their reach; `Lift` and `Bend` keep theirs. An arm whose hand
   lies on the face or an ear (30 px or more over the face's layers, the ears or earwear: a finger at the chin, a fist
   rubbing an eye, a hand on a headphone) keeps to 0.05 of that, `Shoulder` too, so the hand stays there instead of
-  uncovering a smear on the neck, a torn jaw or carrying a piece of the headphone away. An arm whose hand lies over the
-  other layers (body, clothes, objects, hair: 0.7 or more of the hand's opaque pixels) rather than out over the stage
-  keeps to 0.25 of it, `Shoulder` too: what the hand hides there is a guess as well (a dark smear on the chest, the old
-  hand's outline on a book).
+  uncovering a smear on the neck, a torn jaw or carrying a piece of the headphone away. An arm whose hand, or whose
+  sleeve, lies over the other layers (body, clothes, objects, hair: 0.7 or more of its opaque pixels) rather than out
+  over the stage keeps to 0.25 of it, `Shoulder` too: what it hides there is a guess as well (a dark smear on the
+  chest, the old hand's outline on a book, a slab beside the coat under a long sleeve).
 - **Hair swing**: the back hair turns at most 10° and 9° per segment at ±1, a lock or braid 12° and 14° (they were
   14°/12° and 20°/24°): what they hide is a guess. A lock's turns shrink by the share of it (the front hair below the
   chin) lying on the body's layers rather than over the stage or the back hair: a braid resting on the chest hardly

@@ -915,7 +915,8 @@ def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, f
     A hair pixel (opaque over `faint`) over an eye's layers (grown by `reach` px) that is dark (luminance under
     `dark`) and darker than the hair around it (the median of its opaque pixels in a `local` px square, wide enough
     that the lash is not most of it) by `apart` is a lash when its dark stroke (8-connected, followed up to `beyond`
-    px past the eyes) lies over the eyes by `lash_share` at least: the outline of a strand runs on past them and stays.
+    px past the eyes) lies over the eyes by `lash_share` at least: the outline of a strand runs on past them and stays;
+    or a blob of it 3 px thick where the lash layer under it draws dark ink too.
     Those pixels, grown by 1 px, take a blur of the hair's other colors (its dark strokes left out, so no grey smear;
     LaMa drew the strand's body color down into pale tips). What the art showed there goes to a tip layer of the
     nearest lash, right above the hair: opaque on the lash pixels, at least `ring_alpha` on the 1 px around them,
@@ -974,7 +975,15 @@ def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, f
         if not count:
             continue
         share = np.asarray(ndimage.mean(eye[box], labels, range(1, count + 1)))
-        core = np.isin(labels, 1 + np.flatnonzero(share >= lash_share)) & near[box]
+        # A stroke joined to a strand's outline runs on past the eyes, but a blob of it (3 px thick or more, which a
+        # strand's outline never is) where the lash layer under it draws its own ink is the lash all the same (the
+        # corner of a winged lash on the bangs' edge).
+        under = np.zeros(strokes.shape, bool)
+        for lash in lashes:
+            under |= (lash.alpha[box] > 0.5) & (lash.rgba[box][..., :3] @ np.array([0.299, 0.587, 0.114]) < dark)
+        blob = ndimage.binary_opening(strokes & under, structure=np.ones((3, 3)))
+        blob = ndimage.binary_dilation(blob, iterations=1) & strokes & under
+        core = (np.isin(labels, 1 + np.flatnonzero(share >= lash_share)) | blob) & near[box]
         if not core.any():
             continue
         upto = layers[:layers.index(h) + 1]

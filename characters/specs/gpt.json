@@ -44,7 +44,7 @@
   "tail": true,
   "wings": true,
   "legsInSkirt": true,
-  "swing": {"Arm.right": 0.1, "Forearm.right": 0.1, "Shoulder.right": 0.3},
+  "swing": {"Arm.right": 0.1, "Forearm.right": 0.1, "Shoulder.right": 0.3, "HairBack": 0.25},
   "tailSwing": 0.5,
   "poseSwing": {"wait": {"Skirt": 0.3}}
  }
