@@ -619,12 +619,15 @@ def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
         view[..., :3] = np.where(covered[box][..., None], colors, view[..., :3])
 
 
-def wings_alone(layers, reach=6):
+def wings_alone(layers, reach=6, island=0.05, enclosed=0.6):
     """Leaves the wings the only drawing of the wings: See-Through also paints their silhouette into a layer under them
     (the back hair holds a dark copy of both wings), which shows once they flap. A layer's pixels under the wings
-    more than `reach` px from where that layer shows beside them go. Returns the pixels cleared."""
+    more than `reach` px from where that layer shows beside them go. A bit of that layer then cut off from the rest
+    (seen through a gap between the wing's spars) would float as a dash once the wings flap: it goes into the wing
+    framing it (_islands_to, the rest pose stays the same). Returns the pixels cleared."""
     cleared = 0
-    for wing in [layer for layer in layers if layer.tag == "wings"]:
+    wings = [layer for layer in layers if layer.tag == "wings"]
+    for wing in wings:
         over = wing.alpha > 0.5
         for layer in layers[:layers.index(wing)]:
             solid = layer.alpha > 0.5
@@ -634,6 +637,9 @@ def wings_alone(layers, reach=6):
             far = hidden & (ndimage.distance_transform_edt(~(solid & ~over)) > reach)
             layer.rgba[..., 3] = np.where(far, 0.0, layer.alpha)
             cleared += int(far.sum())
+            if far.any():
+                _islands_to(layer, layers, [w for w in wings if layers.index(w) > layers.index(layer)], island,
+                            enclosed)
     return cleared
 
 
@@ -666,11 +672,16 @@ def back_hair_alone(layers, reach=16, cover=0.995, island=0.05, enclosed=0.6):
         fade = np.clip((reach - dist) / (reach / 2), 0, 1).astype(np.float32)
         hair.rgba[..., 3] = np.where(behind, hair.alpha * fade, hair.alpha)
         cleared += int((behind & (dist > reach)).sum())
-        _islands_to_clothes(hair, layers, body, island, enclosed)
+        _islands_to(hair, layers, body, island, enclosed)
     return cleared
 
 
-def _islands_to_clothes(hair, layers, body, island, enclosed):
+def _islands_to(hair, layers, frames, island, enclosed):
+    """Gives each small piece of `hair` (under `island` of its largest piece) that `frames` (layers above it) frame by
+    `enclosed` of its rim to the frame around it most, keeping the composite as it was."""
+    body = frames
+    if not body:
+        return
     mass = hair.alpha > 0.5
     labels, count = ndimage.label(mass, structure=np.ones((3, 3)))
     if count < 2:

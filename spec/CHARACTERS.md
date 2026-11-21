@@ -280,7 +280,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   object on 300 px or more elsewhere. A book held against a sleeve then never moves with the sleeve.
 - **Wings alone**: See-Through also paints the wings' silhouette into a layer under them (the back hair holding a dark
   copy of both wings), which showed once they flapped. A layer's pixels under the wings more than 6 px from where
-  that layer shows beside them go.
+  that layer shows beside them go; a bit of it then cut off from the rest (under 5 % of its largest piece), seen
+  between the wing's spars (which frame 60 % of its rim), goes into that wing (the rest pose stays the same), so it
+  flaps with it instead of floating as a dash.
 - **Arms over the face**: the split draws the face over the arms, so a finger on the lips was painted onto the face
   and stayed there when the arm moved. A piece of 30 px or more where an arm and the face's layers overlap is the
   arm's when the face's own paint there is off the art (median mean channel difference over 0.06, 5 px box) and the

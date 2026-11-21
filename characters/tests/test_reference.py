@@ -1112,6 +1112,17 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[25, 100], 1.0)
         self.assertEqual(hair.alpha[90, 170], 1.0)
 
+    def test_a_bit_of_hair_seen_between_the_wing_spars_flaps_with_the_wing_instead_of_floating(self):
+        from characters.rig.layers import composite, wings_alone
+        hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
+        wing = self.layer("wings", (0.2, 0.2, 0.3), (40, 160, 60, 160))
+        wing.rgba[100:104, 100:104, 3] = 0.0
+        before = composite([hair, wing])
+        wings_alone([hair, wing])
+        self.assertEqual(hair.alpha[102, 102], 0.0)
+        self.assertTrue(np.allclose(wing.rgba[102, 102], (0.6, 0.3, 0.1, 1.0)))
+        self.assertTrue(np.allclose(composite([hair, wing]), before, atol=1e-5))
+
     def test_a_bit_of_back_hair_seen_through_a_gap_in_the_clothes_keeps_still_with_them(self):
         from characters.rig.layers import back_hair_alone, composite
         hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
