@@ -37,7 +37,9 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   art, so one the split gave to the other sleeve (a hand holding a book across the body) is whole all the same; that
   sleeve gives it up, turning clear where it is drawn above the hand and repainted where below. Knuckles the
   front hair drew between strands crossing the hand (within 8 px of the mask, nearer the hand's hue than the hair's)
-  go to the hand, so a gesture replacing it does not leave them in the hair.
+  go to the hand, so a gesture replacing it does not leave them in the hair. Where the hand covered its own sleeve's
+  opening (the hull of the sleeve's main piece within 0.3 of the hand's size), the sleeve takes its colors around
+  it, so a turning hand shows the cuff's lining instead of a hand-shaped hole.
 - `reference/stage.py` films the character style: the character alone on the desktop with the speed, its title, the
   model and the agents orbiting her on Kepler orbits (in front of her and behind her), a ring of lights at her feet as the gauge, and one illustration per speed
   band swapped while she turns edge-on.

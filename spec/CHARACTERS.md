@@ -327,7 +327,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   4 px of an eye's layers that is dark (luminance under 0.4) and 0.2 darker than the hair around it (the median of
   its opaque pixels in a 21 px square: an 11 px one was mostly lash where a lash tip ran along the bangs) is a lash
   when its dark stroke (8-connected, followed 12 px past the eyes) lies over the eyes by 75 % at least; the outline
-  of a strand runs on past them and stays. Those pixels, grown by 1 px, take a blur of the hair's other colors
+  of a strand runs on past them and stays. A blob of such pixels 3 px thick or more (opened by a 3 × 3 square, grown
+  back by 1 px) where the lash layer under it draws its own ink (opaque, luminance under 0.4) is a lash too, though
+  it joins a strand's outline: the corner of a winged lash on the bangs' edge. Those pixels, grown by 1 px, take a blur of the hair's other colors
   without its dark strokes (LaMa drew the strand's body color, blue on pale tips, down into them). What the art
   showed there goes to `eyelash.<side>.tip`, right above the hair: opaque on the lash pixels, at least half on the
   grown pixel, colored so the rest pose stays exactly the same. It is an eyelash layer, so it follows the eye and
