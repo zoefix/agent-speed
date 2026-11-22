@@ -53,6 +53,7 @@ internal enum LinkKind : byte
 
     /// <summary>CodeBuddy Code: by the <c>subagents</c> folder layout, like WorkBuddy, within its own source (METRICS 4.20).</summary>
     CodeBuddyCodePath,
+    OpenBitFunSession,
 }
 
 /// <summary>What one transcript says about its parent (METRICS 6.7).</summary>
@@ -63,6 +64,7 @@ internal readonly record struct AgentLink(
 {
     public static AgentLink Of(TranscriptParser parser) => parser switch
     {
+        OpenBitFun.OpenBitFunParser bitfun => new AgentLink(bitfun.AgentId, LinkKind.OpenBitFunSession, bitfun.SessionId, bitfun.ParentSessionId, bitfun.CreatedMs),
         GrokBuild.GrokParser grok => new AgentLink(grok.AgentId, LinkKind.GrokBuildSession, grok.SessionId, grok.ParentSessionId, grok.CreatedMs),
         Kimi.KimiParser kimi => new AgentLink(kimi.AgentId, LinkKind.KimiSession, kimi.AgentId, kimi.ParentPath, kimi.CreatedMs),
         CodexParser codex => new AgentLink(codex.AgentId, LinkKind.CodexThread, codex.MetaThreadId, codex.ParentThreadId, codex.CreatedMs),

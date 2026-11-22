@@ -8,6 +8,7 @@
 #include "agentspeed/hermes.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/opencode.hpp"
+#include "agentspeed/openbitfun.hpp"
 
 // METRICS 2.1 Reading: how the location lists become roots — every entry names roots, a source reads the union in list
 // order, and a root or database named twice is read once.
@@ -37,6 +38,7 @@ SourceKind sourceOf(RootFamily family) {
         case RootFamily::Qoder: return SourceKind::Qoder;
         case RootFamily::QoderCli: return SourceKind::QoderCli;
         case RootFamily::CodeBuddyCode: return SourceKind::CodeBuddyCode;
+        case RootFamily::OpenBitFun: return SourceKind::OpenBitFun;
     }
     return SourceKind::Codex;
 }
@@ -110,6 +112,7 @@ std::string userRoot(const std::string& path, RootFamily family) {
         case RootFamily::Droid: return droid::rootOf(path);
         case RootFamily::QoderCli: return qoder::cliProjectsOf(path);
         case RootFamily::CodeBuddyCode: return codebuddy::projectsOf(path);
+        case RootFamily::OpenBitFun: return openbitfun::projectsOf(path);
         default: return path;
     }
 }
@@ -187,6 +190,7 @@ SourceLocations SourceLocations::resolve(const LocationLists& lists, const Envir
     l.droidRoots = rootsOf(RootFamily::Droid, droid::rootOf);
     l.qoderCliRoots = rootsOf(RootFamily::QoderCli, qoder::cliProjectsOf);
     l.codeBuddyCodeRoots = rootsOf(RootFamily::CodeBuddyCode, codebuddy::projectsOf);
+    l.openBitFunRoots = rootsOf(RootFamily::OpenBitFun, openbitfun::projectsOf);
 
     std::vector<std::string> stores;
     for (const auto& entry : lists[RootFamily::Antigravity]) {
@@ -280,6 +284,7 @@ std::vector<std::pair<RootFamily, std::string>> SourceLocations::fileRoots() con
     add(RootFamily::Droid, droidRoots);
     add(RootFamily::QoderCli, qoderCliRoots);
     add(RootFamily::CodeBuddyCode, codeBuddyCodeRoots);
+    add(RootFamily::OpenBitFun, openBitFunRoots);
     return roots;
 }
 

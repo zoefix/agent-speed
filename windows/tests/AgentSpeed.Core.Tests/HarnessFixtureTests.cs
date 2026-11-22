@@ -131,7 +131,7 @@ public sealed class HarnessFixtureTests
         }
     }
 
-    private static void AssertResponses(JsonElement expected, IReadOnlyList<ParsedResponse> responses)
+    internal static void AssertResponses(JsonElement expected, IReadOnlyList<ParsedResponse> responses)
     {
         var rows = expected.EnumerateArray().ToList();
         Assert.Equal(rows.Select(row => row.GetProperty("key").GetString()), responses.Select(r => r.Key));

@@ -611,5 +611,11 @@
     "zh-Hans": "在“设置 → API → 局域网”开启后，Agent Speed 会让局域网内的设备读取实时速度，并把速度发送到你添加的设备。",
     "en": "When you turn it on in Settings → API → Local Network, Agent Speed lets devices on your network read the live speed and sends it to devices you add.",
     "ja": "「設定 → API → ローカルネットワーク」でオンにすると、Agent Speed はネットワーク内のデバイスにライブ速度を読み取らせ、追加したデバイスへ送信します。"
+  },
+  "mac.settings.sources.chooseOpenBitFun": {
+    "zh-Hant": "選擇 OpenBitFun 資料夾",
+    "zh-Hans": "选择 OpenBitFun 文件夹",
+    "en": "Choose OpenBitFun Folder",
+    "ja": "OpenBitFun フォルダを選択"
   }
 }

@@ -99,15 +99,19 @@ RemoteResponse response(const Fields& line, const std::string& hostId, const std
     auto& r = out.record;
     r.key = f.string("key", limits::kKeyBytes);
     if (r.key.empty()) fail(LineError::Kind::OutOfRange, "r.key");
+    r.source = f.source("source");
     r.requestCount = f.integer("requestCount");
-    if (r.requestCount < 1 || r.requestCount > 100'000) fail(LineError::Kind::OutOfRange, "r.requestCount");
+    if (r.requestCount < (r.source == SourceKind::OpenBitFun ? 0 : 1) || r.requestCount > 100'000) fail(LineError::Kind::OutOfRange, "r.requestCount");
     r.tokens.input = f.tokens("input");
     r.tokens.cachedInput = f.tokens("cachedInput");
     r.tokens.cacheWriteInput = f.tokens("cacheWriteInput");
     r.tokens.cacheWrite1hInput = std::min(r.tokens.cacheWriteInput, f.tokens("cacheWrite1hInput"));
     r.tokens.output = f.tokens("output");
     r.tokens.reasoning = f.tokens("reasoning");
-    r.source = f.source("source");
+    if (r.source == SourceKind::OpenBitFun) {
+        const auto round = f.optionalString("traceRoundKey", limits::kKeyBytes);
+        if (round && round->starts_with("openbitfun:round:")) r.traceRoundKey = round;
+    }
     r.agentId = prefix + relayAgentId(f, "agent");
     r.model = f.modelString("model", limits::kModelBytes);
     r.startMs = f.optionalTime("startMs");

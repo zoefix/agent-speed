@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "session_id": "session",
+  "trace_id": "unfinished",
+  "turn_id": "turn",
+  "operation_kind": "model_round",
+  "operation_id": "pending",
+  "timing": {
+    "started_at": "2026-10-20T12:00:05.000+00:00"
+  }
+}

@@ -65,6 +65,6 @@ final class TrackedFile {
     /// A Factory Droid session also changes when its sidecar does, whatever its modification time (METRICS 4.16).
     func hasChanged(comparedTo stat: FileStat) -> Bool {
         stat.size != lastStat.size || stat.modifiedNs != lastStat.modifiedNs || stat.identity != lastStat.identity
-            || parser.sidecarHasChanged
+            || stat.contentSignature != lastStat.contentSignature || parser.sidecarHasChanged
     }
 }

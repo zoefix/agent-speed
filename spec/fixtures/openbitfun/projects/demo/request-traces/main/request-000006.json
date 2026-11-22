@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "trace_id": "legacy",
+  "session_id": "main",
+  "capture_mode": "usage_only",
+  "recorded_at": "2026-10-20T12:00:00.000+00:00",
+  "request": {
+    "model_id": "gpt-5",
+    "provider": "openai",
+    "attempt_number": 1
+  },
+  "response": {
+    "status": "completed",
+    "usage": {
+      "promptTokenCount": 500,
+      "candidatesTokenCount": 500,
+      "cachedContentTokenCount": 0,
+      "cacheCreationTokenCount": 0,
+      "reasoningTokenCount": 0
+    }
+  }
+}

@@ -215,6 +215,7 @@ enum TranscriptLocations {
         case .droid: [defaultDroidRoot]
         case .qoderCli: defaultQoderCliRoots
         case .codebuddyCode: [defaultCodebuddyCodeConfigFolder.appendingPathComponent("projects", isDirectory: true)]
+        case .openbitfun: [OpenBitFunPaths.defaultRoot]
         }
     }
 

@@ -31,7 +31,7 @@ HERMES_SCRIPTS = {"hermes", "hermes-agent", "hermes-acp"}
 QODER_CORE = re.compile(r"/resources/bin/[^/]+/[^/]+$", re.IGNORECASE)
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
            "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
-           "codebuddyCode")
+           "codebuddyCode", "openbitfun")
 
 
 # ---------------------------------------------------------------------------------------------------- formatting

@@ -26,6 +26,7 @@ public enum LocationFolder
     Qoder,
     QoderCli,
     CodeBuddyCode,
+    OpenBitFun,
 }
 
 public static class LocationFolders
@@ -57,6 +58,7 @@ public static class LocationFolders
         LocationFolder.Qoder => "qoder",
         LocationFolder.QoderCli => "qoderCli",
         LocationFolder.CodeBuddyCode => "codebuddyCode",
+        LocationFolder.OpenBitFun => "openbitfun",
         _ => throw new ArgumentOutOfRangeException(nameof(folder)),
     };
 
@@ -101,6 +103,7 @@ public static class LocationFolders
         SourceKind.Qoder => LocationFolder.Qoder,
         SourceKind.QoderCli => LocationFolder.QoderCli,
         SourceKind.CodeBuddyCode => LocationFolder.CodeBuddyCode,
+        SourceKind.OpenBitFun => LocationFolder.OpenBitFun,
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 

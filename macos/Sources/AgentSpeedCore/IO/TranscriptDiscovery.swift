@@ -30,9 +30,11 @@ enum TranscriptNames: Sendable {
     /// `*.jsonl` not starting with `.`, directly in the root or in a folder directly in it that does not start with `.`
     /// (Factory Droid).
     case droidSession
+    case openbitfunSession
 
     func matches(_ name: String) -> Bool {
         switch self {
+        case .openbitfunSession: return name == "metadata.json"
         case .kimiSession: return name == "wire.jsonl"
         case .grokBuildSession: return name == "updates.jsonl"
         case .jsonl:
@@ -65,6 +67,7 @@ enum TranscriptNames: Sendable {
         case .workbuddySession: depth == 1 || depth == 3
         case .kimiSession: depth == 4
         case .grokBuildSession: depth == 2
+        case .openbitfunSession: depth == 3
         case .droidSession: depth <= 1
         case .jsonl, .codexSession, .dshSession, .piSession: true
         }
@@ -94,6 +97,8 @@ enum TranscriptNames: Sendable {
             return depth < 4 && (depth != 2 || name == "agents") && !name.hasPrefix(".")
         case .grokBuildSession:
             return depth < 2 && !name.hasPrefix(".")
+        case .openbitfunSession:
+            return depth < 3 && (depth != 1 || name == "sessions") && !name.hasPrefix(".")
         case .droidSession:
             return depth == 0 && !name.hasPrefix(".")
         case .jsonl, .codexSession, .dshSession:
@@ -123,6 +128,8 @@ enum TranscriptNames: Sendable {
             return components.count == 3 && !components.contains { $0.hasPrefix(".") }
         case .piSession:
             return components.count <= TranscriptDiscovery.maxDepth + 1 && !components.contains { $0.hasPrefix(".") }
+        case .openbitfunSession:
+            return components.count == 4 && components[1] == "sessions" && !components.contains { $0.hasPrefix(".") }
         case .droidSession:
             return components.count <= 2 && !components.contains { $0.hasPrefix(".") }
         case .jsonl, .codexSession, .dshSession:

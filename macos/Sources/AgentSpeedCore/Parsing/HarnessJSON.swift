@@ -1,6 +1,11 @@
 import Foundation
 
 enum HarnessJSON {
+    static func text(_ value: JSONValue?) -> String? {
+        guard let text = value?.string, !text.isEmpty else { return nil }
+        return text
+    }
+
     static func number(_ value: JSONValue?) -> JSONNumber? {
         guard let literal = value?.literal else { return nil }
         return Data(literal.text.utf8).withUnsafeBytes { bytes in

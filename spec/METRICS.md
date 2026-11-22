@@ -8,8 +8,8 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition), `qoder` (Qoder IDE, Alibaba), `qoderCli` (Qoder CLI), `codebuddyCode` (CodeBuddy Code, Tencent's CLI). This is the append-only *source order*. |
-| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17; Qoder IDE: one per chat session of a database, 4.18.) |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition), `qoder` (Qoder IDE, Alibaba), `qoderCli` (Qoder CLI), `codebuddyCode` (CodeBuddy Code, Tencent's CLI), `openbitfun` (OpenBitFun). This is the append-only *source order*. |
+| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17; Qoder IDE: one per chat session of a database, 4.18; OpenBitFun: one per session metadata document with its model rounds and usage records or request traces, 4.21.) |
 | Response | One model API call that produced a usage record. |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
 
@@ -42,6 +42,7 @@ from cumulative session counters (4.16).
 | Qoder IDE (the agent chat of the editor; international and China editions) | `<data>/Qoder/SharedClientCache/cache/db/local.db` and `<data>/QoderCN/SharedClientCache/cache/db/local.db`, with `<data>` = macOS `~/Library/Application Support`, Windows `%APPDATA%`, Linux `$XDG_CONFIG_HOME`, else `~/.config` (4.18) | the IDE's data folder, its `SharedClientCache` folder, or the folder that holds `local.db`: one database (4.18) |
 | Qoder CLI (`qodercli`, `qoderclicn`: interactive, `-p`) | `$QODER_CONFIG_DIR/projects`, else `~/.qoder/projects`; `$QODERCN_CONFIG_DIR/projects`, else `~/.qoder-cn/projects` (4.19) | a config folder or its `projects` folder: that `projects` folder |
 | CodeBuddy Code (`codebuddy`, `cbc`: interactive, `-p`, ACP, Web UI) | `$CODEBUDDY_CONFIG_DIR/projects` when the variable is not blank, else `~/.codebuddy/projects` (4.20) | a config folder or its `projects` folder: that `projects` folder |
+| OpenBitFun | `$OPENBITFUN_HOME/projects`, else `$OPENBITFUN_E2E_HOME/projects`, else `~/.openbitfun/projects` (4.21) | a data folder or its `projects` folder: that `projects` folder |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
@@ -51,12 +52,12 @@ Discovery: recursive enumeration of `*.jsonl` (Codex also `*.jsonl.zst`, 5.3; De
 fixed depths, see 4.6; omp and Pi: see 4.7 and 4.13; Antigravity: conversation databases, see 4.8; WorkBuddy and
 CodeBuddy Code: fixed depths, see 4.9 and 4.20; OpenClaw: agent databases, see 4.14; Hermes Agent: `agent.log` and its rotated files, see
 4.15; Factory Droid: one or two levels below the root, each transcript with its settings file, see 4.16; Devin: one
-SQLite database, see 4.17; Qoder IDE: one SQLite database per edition, see 4.18),
+SQLite database, see 4.17; Qoder IDE: one SQLite database per edition, see 4.18; OpenBitFun: session metadata at a fixed depth, see 4.21),
 maximum depth 6, never follow symlinks, at most 20 000 files per root.
 A source is *detected* when any of its roots (Antigravity: any store; WorkBuddy: the data folder) exists or it has data
 today; what an undetected source shows is DESIGN 2b (unavailable sources), 4 and 5.
 The app never writes inside these folders.
-For ZCode, Kimi Code CLI, Grok Build, Hermes Agent and Factory Droid, the source's session count includes today's main
+For ZCode, Kimi Code CLI, Grok Build, Hermes Agent, Factory Droid and OpenBitFun, the source's session count includes today's main
 sessions only; subagents remain visible in the agent tree and ordinary forks remain separate sessions, as with
 WorkBuddy.
 For OpenClaw, a source is detected when a state folder (or a user location) exists; its session count is the
@@ -67,9 +68,9 @@ today (4.17). Qoder IDE likewise counts the chat sessions with a row today (4.18
 ### 2.1 Location lists
 
 Every source group of the settings (DESIGN 5) has a *location list* (issue #45): Claude Code and Claude Desktop share
-one, every other source has its own. The twenty lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
+one, every other source has its own. The twenty-one lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
 `omp`, `antigravity`, `workbuddy`, `workbuddyAi`, `zcode`, `kimi`, `grokBuild`, `pi`, `openclaw`, `hermes`, `droid`,
-`devin`, `qoder`, `qoderCli`, `codebuddyCode`.
+`devin`, `qoder`, `qoderCli`, `codebuddyCode`, `openbitfun`.
 
 - **Entries.** An entry is either `automatic` — every root of the table's *Root* column, derived from the environment
   whenever roots are resolved, exactly as before lists existed (Codex: the sessions root and the agent-scoped Codex home
@@ -189,6 +190,7 @@ OpenCode: `data.model.providerID`. omp: `message.provider` (assistant) or the en
 Pi: `message.provider` (assistant) or the entry's `provider` (`usage` entries).
 OpenClaw: `message.provider` (assistant).
 Hermes Agent: the `provider=` field of the API-call line (4.15; `unknown` counts as null).
+OpenBitFun: `request.provider` of the trace or the usage record’s `channel.protocol` (4.21).
 Factory Droid: `custom` for a model id that starts with `custom:` (the user's own model, 4.16).
 WorkBuddy: `custom` for a model of the user's own provider (`custom:` / `custom-local:` ids, 4.9). Every other
 source: null. Empty strings count as null.
@@ -2346,6 +2348,93 @@ own, and it writes WorkBuddy's transcript format (4.9) to its own config folder.
   folder, the same files are read by two sources: their calls count once, under the source that reads them first
   (3.4), their sessions twice. The CodeBuddy IDE and the IDE plugins are not read.
 
+### 4.21 OpenBitFun
+
+**Default usage ledger.** All three platforms read daily `YYYY-MM-DD.json` files from
+`openbitfun/data/token_usage/records` beneath the platform directory listed here.
+
+| Platform | Directory |
+| --- | --- |
+| macOS | `~/Library/Application Support` |
+| Windows | `%APPDATA%` |
+| Linux | `$XDG_CONFIG_HOME` when absolute, otherwise `~/.config` |
+
+Only the `records` list is read, excluding aggregate statistics and per-model copies. Session readers share one decoded copy of each changed
+day. They retain request identities, models, providers and token counters. Diagnostic request tracing can remain off.
+
+- Join `session_id`, `turn_id` and `token_details.openbitfunModelRequest.roundId` to the session metadata and
+  `turns/turn-*.json` model rounds. Version 1 request context and a nonempty `attemptId` are required. Repeated
+  copies of an attempt replace that attempt, rather than adding its tokens again.
+- One measured response is a model round: sum its distinct attempts' native counters, with `requestCount` equal
+  to the number of distinct attempts. Wait until the ledger contains the round's reported `attemptCount`.
+  `usageKnown: false` keeps the round unmeasured; available counters still enter totals.
+- The completion clock is the round's `endTime`. Use its recorded `durationMs`, or its `startTime` when duration
+  is absent, subject to the normal 15-minute interval limit. This is round throughput: it includes first-token
+  waiting and any retry delays inside the native model-round duration. It does not infer independent attempt
+  durations or divide by the whole conversation's elapsed time.
+- Read only measurement fields from turn documents; discard conversation content. An unfinished model round
+  supplies generating activity until its turn is completed, cancelled or in error. Ending a turn closes its
+  pending rounds and requests that belong to the turn. A trace uses its `turn_id`, or, for older traces,
+  the unique turn whose recorded time span contains its start. Requests from other turns stay active.
+  Ending a turn never supplies missing round timing or usage. Turn-file changes and ledger
+  updates invalidate the session's read/history identity even when its metadata is unchanged. Rounds already
+  present in a session skipped at startup remain its baseline.
+- A session with ledger records uses those records in preference to diagnostic traces. If ledger data appears
+  after trace data was read, it replaces that contribution. Withdraw a round from live totals when its remaining
+  attempts fall below its declared count. Re-reading the same inputs from the beginning gives the same totals.
+  In live reports (11.4), an attempt with `operation_kind == "model_round"` identifies its round by
+  `turn_id` and `operation_id`. For older traces without an operation, use a completed round containing the
+  whole attempt only when the match is unique. The round and its matched attempts share credit for each
+  reported counter. Only growth beyond the amount already reported contributes when the source changes.
+
+**Diagnostic trace compatibility.** A session without attributed ledger records uses the diagnostic traces
+described below on all three platforms.
+
+OpenBitFun stores one JSON document per model request attempt. Agent Speed reads these documents with each
+session's metadata, never the cumulative session token counters or response bodies. Fixtures are generated by
+`spec/tools/openbitfun_fixtures.py`; `spec/tools/openbitfun_reference.py` supplies the independent reader.
+
+- **Availability.** Model request tracing must be enabled in OpenBitFun (`UsageOnly` or `Full`); it is off by
+  default. `UsageOnly` contains all fields needed for measurement. Agent Speed does not change this setting.
+  Older traces without completion timing cannot supply a response timestamp and are not measured.
+- **Discovery.** One agent is `<projects>/<project>/sessions/<session>/metadata.json`; only this fixed depth is
+  scanned. Its request files are `request-*.json` in `<project>/request-traces/<session>` and, for the earlier
+  layout, `<project>/sessions/<session>/request-traces`. Read metadata first, then request paths in ordinal order.
+  Read regular files in these locations and skip symlinks.
+- **Metadata.** `sessionId` identifies the session, `workspacePath` names the project, and `createdAt` is its
+  creation time in milliseconds. Their snake_case aliases are accepted. `sessionKind == "subagent"` or
+  `relationship.kind == "subagent"` marks a child; `relationship.parentSessionId` (or `parent_session_id`) links
+  it to its parent. Each child owns its own requests; no parent rollup is added.
+- **Request identity.** Only version 1 traces whose `session_id` equals the metadata's session id are read.
+  The response key is `"openbitfun:" + trace_id`. Each attempt with usage is separate, including a failed attempt
+  that returned partial usage; a retry with a new trace id is another call. Re-reading or copying the same trace
+  cannot add another completion. A changed record with the same key replaces that response under the ordinary
+  ownership rules (3.4).
+- **Usage.** An object `response.usage` and a valid `timing.finished_at` are required. Normalized fields are
+  `input = promptTokenCount`, `cachedInput = cachedContentTokenCount`, `cacheWriteInput = cacheCreationTokenCount`,
+  `output = candidatesTokenCount`, and `reasoning = min(output, reasoningTokenCount)`, using the counts of 3.2.
+  Input already contains cache tokens and output already contains reasoning; neither is added again.
+  `cacheWrite1hInput = 0`, `final = true`, `firstMs = null`, `fast = false`, `requestCount = 1`.
+- **Timing.** `endMs = timing.finished_at` (RFC 3339). A nonnegative `duration_ms` is the monotonic attempt
+  duration: `startMs = endMs - duration_ms`. A duration above 15 minutes makes the interval unmeasured (tokens
+  still enter totals); it must not fall back to a shorter wall-clock interval. Without a recorded duration,
+  `startMs = timing.started_at`; the normal interval checks apply (3.3). This includes first-token waiting and
+  the request's stream handling, and excludes tool execution, retry backoff and provider queueing outside the
+  attempt. Never substitute file modification time or `recorded_at` for the completion timestamp.
+- **Model and phase.** Model and provider come from `request.model_id` and `request.provider`. A trace with a
+  start but no `response` object is generating. A response object closes that attempt even without usage. The
+  oldest outstanding attempt supplies the in-flight start; when none remain the session is idle. Normal stale
+  activity expiry applies. No tool actions or reasoning-effort settings are inferred from request contents.
+- **Reading and history.** Treat metadata and traces as one session for discovery, startup ordering and history
+  invalidation. Sum the sizes of the session documents and use their newest modification time or the newest
+  timestamp of the session's own ledger rows, whichever is later. Its ledger identity uses its own measurements.
+  Skip an individual document above the 64 MiB limit and continue reading the session. Read only changed request
+  documents while running, including atomic file replacements; unchanged documents produce no events. Requests
+  present when an old session starts at its end are its baseline, while metadata is still read before new
+  requests. Each document uses the existing 64 MiB whole-document limit. A trace change maps to its session's
+  metadata path for watcher notification. History stores one contribution per session and uses the same parser;
+  a later trace completion invalidates that contribution even if metadata did not change.
+
 ## 5. Reading files
 
 - Startup reading order (it decides which file owns a duplicated key): files sorted by modification time ascending,
@@ -2521,6 +2610,8 @@ Parent links (`parentId`, an agent id or null):
   `<database path>#<parent_session_id>` when that session is a tracked agent (4.18).
 - Qoder CLI: as Claude (`<project folder>/<session id>/subagents/…` under `<project folder>/<session id>.jsonl`).
 - CodeBuddy Code: as WorkBuddy (4.20).
+- OpenBitFun: `relationship.parentSessionId` names a tracked session of the same source; choose the earliest
+  `createdAt` (then ordinal path) when copies share an id.
 - Self references and cycles resolve to null.
 
 List:
@@ -2968,6 +3059,10 @@ Qoder IDE (4.18): contributions are kept per chat session, with the identity of 
 like Claude. Adding the two sources needs no new analysis version. CodeBuddy Code (4.20): per file, like WorkBuddy; the
 source needs no analysis version of its own (version 12 is for the WorkBuddy files that already carry measured
 attempts).
+
+OpenBitFun (4.21): one contribution per session metadata path, invalidated by changes to its turn documents and
+its own daily usage records, or to the diagnostic traces used when the session has no ledger records.
+Adding this source needs no new analysis version.
 
 Cost (9.7): every row also has `costMicroUsd` and `unpricedRequests`, every model `costMicroUsd` and
 `unpricedRequests`, and every date a `priceVersion`. The cost feature bumps the store version; days kept from an

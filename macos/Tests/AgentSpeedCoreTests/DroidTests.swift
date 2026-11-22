@@ -491,7 +491,7 @@ struct DroidTests {
     // MARK: - Source
 
     @Test func sourceOrderAndProcessRow() {
-        #expect(SourceKind.allCases.suffix(5) == [.droid, .devin, .qoder, .qoderCli, .codebuddyCode],
+        #expect(SourceKind.allCases.suffix(6) == [.droid, .devin, .qoder, .qoderCli, .codebuddyCode, .openbitfun],
                 "Devin, Qoder, then CodeBuddy Code, appended after Droid")
         #expect(SourceKind.allCases.firstIndex(of: .droid) == SourceKind.allCases.firstIndex(of: .hermes)! + 1)
         #expect(SourceSet(.droid).rawValue == 1 << 16)

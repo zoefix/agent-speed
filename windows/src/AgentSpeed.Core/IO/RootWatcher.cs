@@ -61,6 +61,7 @@ internal sealed class RootWatcher : IDisposable
         TranscriptNaming.OpenClawDatabase => [OpenClaw.OpenClawPaths.DatabaseName, OpenClaw.OpenClawPaths.DatabaseName + "-wal"],
         TranscriptNaming.KimiSession => ["wire.jsonl"],
         TranscriptNaming.GrokBuildSession => ["updates.jsonl", "summary.json"],
+        TranscriptNaming.OpenBitFunSession => ["metadata.json", "turn-*.json", "request-*.json"],
         TranscriptNaming.HermesLog => [Hermes.HermesPaths.LiveLogName + "*"],
         TranscriptNaming.DroidSession => ["*" + Droid.DroidPaths.TranscriptExtension, "*" + Droid.DroidPaths.SidecarSuffix],
         TranscriptNaming.DevinDatabase => [Devin.DevinPaths.DatabaseName, Devin.DevinPaths.DatabaseName + Devin.DevinPaths.WalSuffix],

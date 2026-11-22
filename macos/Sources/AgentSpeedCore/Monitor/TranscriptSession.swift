@@ -295,8 +295,8 @@ final class TranscriptSession {
                 let start: FileTailer.Start
                 if !readsBacklog {
                     start = .end(file.stat.size)
-                } else if root.family.isDatabase {
-                    // A conversation database is read completely; the size rules of section 5 do not apply.
+                } else if root.family.isDatabase || root.family == .openbitfun {
+                    // Databases and groups of request documents are read whole, not as a single large transcript.
                     start = .beginning
                 } else if TranscriptReader.isDocument(file.path), file.stat.size > DocumentReader.defaultMaxBytes {
                     // Whole-document sessions this large are not read at all (METRICS 4.6).
@@ -663,7 +663,7 @@ final class TranscriptSession {
             schedule(WholeFileRead(path: file.path, family: file.family, fileID: file.fileID, reader: file.reader))
             return false
         }
-        if file.family.isDatabase { return readDatabase(file, live: live) }
+        if file.family.isDatabase || file.family == .openbitfun { return readBatch(file, live: live) }
         var upserts: [ResponseUpsert] = []
         var completions: [ToolCompletion] = []
         let metadataChanged = file.parser.refreshMetadata(deduper: &deduper) { upserts.append($0) }
@@ -707,23 +707,25 @@ final class TranscriptSession {
         return metadataChanged || result.bytesRead > 0 || result.didReset || cycleChanged
     }
 
-    /// One read of an Antigravity database, throttled while live (METRICS 5.4).
-    private func readDatabase(_ file: TrackedFile, live: Bool) -> Bool {
-        let now = DispatchTime.now().uptimeNanoseconds
-        if live, file.lastReadNs != 0, now &- file.lastReadNs < Self.databaseReadIntervalNs {
-            file.isDirty = true
-            return false
+    /// OpenBitFun and Antigravity deliver typed batches. Live database reads are throttled (METRICS 5.4).
+    private func readBatch(_ file: TrackedFile, live: Bool) -> Bool {
+        if file.family.isDatabase {
+            let now = DispatchTime.now().uptimeNanoseconds
+            if live, file.lastReadNs != 0, now &- file.lastReadNs < Self.databaseReadIntervalNs {
+                file.isDirty = true
+                return false
+            }
+            file.lastReadNs = now
         }
         file.isDirty = false
-        file.lastReadNs = now
-        let (batch, result) = file.reader.readDatabase()
+        let (lines, result) = TranscriptDecoder.decode(file.family, reader: &file.reader)
         if result.failed, file.family.stat(file.path) == nil {
             untrack(file.path)
             return true
         }
         if result.didReset { file.resetParser() }
         var upserts: [ResponseUpsert] = []
-        file.parser.consume(.antigravity(batch), deduper: &deduper) { upserts.append($0) }
+        file.parser.consume(lines, deduper: &deduper) { upserts.append($0) }
         let project = projectName(of: file)
         for upsert in upserts { deliver(upsert, project: project, live: live, agent: agentState(of: file)) }
         finishRead(of: file, result: result)
@@ -872,7 +874,7 @@ final class TranscriptSession {
         for file in files.values {
             let state = file.state
             guard let last = state.lastLineMs, last >= todayStartMs, enabledSources.contains(state.source) else { continue }
-            if file.family.writesWorkBuddyFormat || [.kimi, .grokBuild, .pi, .droid, .qoderCli].contains(file.family),
+            if file.family.writesWorkBuddyFormat || [.kimi, .grokBuild, .pi, .droid, .qoderCli, .openbitfun].contains(file.family),
                state.isSubagent {
                 continue
             }

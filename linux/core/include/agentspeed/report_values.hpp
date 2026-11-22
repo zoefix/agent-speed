@@ -101,11 +101,16 @@ public:
 private:
     struct Reported {
         Usage usage;
+        std::optional<std::string> traceRound;
         std::int64_t endMs = 0;
         ExecutionModes modes;  // frozen at the first count, so later metadata never moves counted usage
     };
     static Reported valuesOf(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd);
 
+    struct TraceRound { Usage usage; std::size_t members = 0; };
+    Usage reportGrowth(const Usage& growth, const ParsedResponse& response, const Reported* previous);
+    void forget(const std::string& key);
+    std::unordered_map<std::string, TraceRound> traceRounds_;
     std::unordered_map<std::string, Reported> counted_;
     std::deque<std::string> order_;
     Counters counters_;

@@ -6,8 +6,9 @@ extension RelayLineDecoder {
         let f = try line.object("r")
         let key = try f.string("key", maxBytes: RemoteLimits.keyBytes)
         guard !key.isEmpty else { throw RemoteLineError(.outOfRange, "r.key") }
+        let source = try f.source("source")
         let requestCount = try f.integer("requestCount")
-        guard (1...100_000).contains(requestCount) else { throw RemoteLineError(.outOfRange, "r.requestCount") }
+        guard ((source == .openbitfun ? 0 : 1)...100_000).contains(requestCount) else { throw RemoteLineError(.outOfRange, "r.requestCount") }
         let cacheWrite = try f.tokens("cacheWriteInput")
         let usage = TokenUsage(
             input: try f.tokens("input"),
@@ -17,9 +18,9 @@ extension RelayLineDecoder {
             output: try f.tokens("output"),
             reasoning: try f.tokens("reasoning")
         )
-        let record = ResponseRecord(
+        var record = ResponseRecord(
             key: key,
-            source: try f.source("source"),
+            source: source,
             agentId: try agentId(f, "agent"),
             model: try f.modelString("model", maxBytes: RemoteLimits.modelBytes),
             startMs: try f.optionalTime("startMs"),
@@ -33,6 +34,8 @@ extension RelayLineDecoder {
             firstMs: try f.optionalTime("firstMs"),
             host: hostId
         )
+        if source == .openbitfun, let round = try f.optionalString("traceRoundKey", maxBytes: RemoteLimits.keyBytes),
+           round.hasPrefix("openbitfun:round:") { record.traceRoundKey = round }
         return RemoteResponse(
             hostId: hostId,
             record: record,

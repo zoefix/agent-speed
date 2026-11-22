@@ -27,6 +27,7 @@ enum class RootFamily {
     Qoder,
     QoderCli,
     CodeBuddyCode,
+    OpenBitFun,
 };
 
 RootFamily familyOf(SourceKind source);

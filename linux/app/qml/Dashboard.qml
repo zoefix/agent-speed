@@ -107,7 +107,7 @@ Window {
         if (root.snap.demo === true) {
             const order = ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
                            "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
-                           "codebuddyCode"]
+                           "codebuddyCode", "openbitfun"]
             for (let q = 0; q < listed.length; ++q) {
                 if (sources.some(r => r.source === listed[q])) continue
                 sources.push({ key: listed[q], source: listed[q], name: S.tr2(S.rev, "source." + listed[q]), todayText: "0", live: 0 })

@@ -281,7 +281,9 @@ first line is not a valid `start` within 30 s.
 **Response** (METRICS 4 record): `key` (≤ 512), `source`, `agent` (agent id), `model`, `startMs`, `endMs`, `firstMs`,
 `input`, `cachedInput`, `cacheWriteInput`, `cacheWrite1hInput`, `output`, `reasoning`, `requestCount` (1–100 000),
 `modes`, `final`, `provider` (≤ 64 or null), `fast`. No cost: the app prices every response with its own price book
-(METRICS 9.3), so live costs are identical for every host.
+(METRICS 9.3), so live costs are identical for every host. An OpenBitFun withdrawal carries zero tokens,
+`requestCount = 0` and a null `startMs`. An optional OpenBitFun `traceRoundKey` (≤ 512 bytes) names the
+matching native round for live report accounting (METRICS 4.21).
 
 **History aggregate**: the Linux core's day aggregate encoding (`history_store.cpp`, `encode`): `requests`, `input`,
 `cachedInput`, `cacheWriteInput`, `output`, `reasoning`, `measuredOutput`, `measuredMs`, `unfinalized`, `agents`,

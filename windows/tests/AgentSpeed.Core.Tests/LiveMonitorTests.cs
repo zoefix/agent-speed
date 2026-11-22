@@ -172,7 +172,8 @@ public sealed class LiveMonitorTests : IDisposable
         DevinRoot: _temp.Combine("home", "devin"),
         QoderRoot: _temp.Combine("home", "Qoder"),
         QoderCliRoot: _temp.Combine("home", ".qoder"),
-        CodeBuddyCodeRoot: _temp.Combine("home", ".codebuddy"));
+        CodeBuddyCodeRoot: _temp.Combine("home", ".codebuddy"),
+        OpenBitFunRoot: _temp.Combine("home", ".openbitfun"));
 
     private sealed class HubProbe
     {

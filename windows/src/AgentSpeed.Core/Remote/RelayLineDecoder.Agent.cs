@@ -103,8 +103,9 @@ internal sealed partial class RelayLineDecoder
             throw new RemoteLineException(RemoteLineErrorKind.OutOfRange, "r.key");
         }
 
+        var source = f.Source("source");
         var requestCount = f.Integer("requestCount");
-        if (requestCount is < 1 or > 100_000)
+        if (requestCount < (source == SourceKind.OpenBitFun ? 0 : 1) || requestCount > 100_000)
         {
             throw new RemoteLineException(RemoteLineErrorKind.OutOfRange, "r.requestCount");
         }
@@ -119,7 +120,7 @@ internal sealed partial class RelayLineDecoder
             Reasoning: f.Tokens("reasoning"));
         var record = new ParsedResponse(
             key,
-            f.Source("source"),
+            source,
             AgentId(f, "agent"),
             f.ModelString("model", RemoteLimits.ModelBytes),
             f.OptionalTime("startMs"),
@@ -133,6 +134,8 @@ internal sealed partial class RelayLineDecoder
             Modes = Modes(f, "modes"),
             FirstMs = f.OptionalTime("firstMs"),
             Host = HostId,
+            TraceRoundKey = source == SourceKind.OpenBitFun && f.OptionalString("traceRoundKey", RemoteLimits.KeyBytes) is { } round
+                && round.StartsWith("openbitfun:round:", StringComparison.Ordinal) ? round : null,
         };
         return new RemoteResponse(HostId, record, line.Bool("completion"), line.String("project", RemoteLimits.ProjectBytes));
     }

@@ -10,6 +10,7 @@ struct TranscriptReader: Sendable {
     private var compressed: CompressedStreamReader?
     private var document: DocumentReader?
     private var database: AntigravityReader?
+    private var openbitfun: OpenBitFunReader?
     /// omp and Pi: the first read delivers the file's session header before the lines at its start offset (METRICS 4.7).
     private var headerPending: Bool
 
@@ -21,7 +22,9 @@ struct TranscriptReader: Sendable {
         readsHeaderFirst: Bool = false
     ) {
         headerPending = readsHeaderFirst && start != .beginning
-        if Self.isDatabase(path) {
+        if (path as NSString).lastPathComponent == "metadata.json" {
+            openbitfun = OpenBitFunReader(path: path, start: start)
+        } else if Self.isDatabase(path) {
             database = AntigravityReader(path: path, start: start)
         } else if Self.isFrameStream(path) {
             frames = ZstdFrameTailer(path: path, start: start, maxLineBytes: maxLineBytes)
@@ -54,7 +57,7 @@ struct TranscriptReader: Sendable {
 
     /// The next read decodes the file whole: a compressed session, a legacy Gemini document, or an Antigravity
     /// database that was not read at startup and is read completely on its first change.
-    var readsWholeFile: Bool { compressed != nil || document != nil || database?.defersFirstRead == true }
+    var readsWholeFile: Bool { openbitfun != nil || compressed != nil || document != nil || database?.defersFirstRead == true }
 
     /// An Antigravity database whose `mode=ro` connection is open.
     var hasOpenConnection: Bool { database?.hasOpenConnection == true }
@@ -69,6 +72,11 @@ struct TranscriptReader: Sendable {
         return database!.read()
     }
 
+    mutating func readOpenBitFun() -> (OpenBitFunBatch, FileTailer.ReadResult) {
+        guard openbitfun != nil else { return (OpenBitFunBatch(), .init(failed: true)) }
+        return openbitfun!.read()
+    }
+
     /// Reads every complete line appended since the last call (a document is delivered whole, as one unit).
     /// `onMalformed` reports frames that failed to decode.
     mutating func read(
@@ -76,8 +84,8 @@ struct TranscriptReader: Sendable {
         onMalformed: () -> Void = {},
         onLine: (UnsafeRawBufferPointer) -> Void
     ) -> FileTailer.ReadResult {
-        if database != nil {
-            // Databases are read in batches (`readDatabase`), never as lines.
+        if database != nil || openbitfun != nil {
+            // These sources deliver typed batches.
             return FileTailer.ReadResult(failed: true)
         }
         if frames != nil {

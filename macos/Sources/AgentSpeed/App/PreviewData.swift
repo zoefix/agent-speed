@@ -210,7 +210,7 @@ enum PreviewData {
             case .deepseek: source.available = false
             case .claudeDesktop: source.enabled = false
             case .codex, .claudeCode, .opencode, .gemini, .omp, .antigravity, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .droid, .devin, .qoder, .qoderCli,
-                 .codebuddyCode: return source
+                 .codebuddyCode, .openbitfun: return source
             }
             source.sessionCount = 0
             source.live = .zero
@@ -280,6 +280,7 @@ enum PreviewData {
         case .qoder: 5
         case .qoderCli: 3
         case .codebuddyCode: 4
+        case .openbitfun: 2
         }
     }
 }

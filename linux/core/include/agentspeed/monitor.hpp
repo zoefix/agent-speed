@@ -13,6 +13,7 @@
 #include "agentspeed/devin_source.hpp"
 #include "agentspeed/discovery.hpp"
 #include "agentspeed/engine.hpp"
+#include "agentspeed/fs_util.hpp"
 #include "agentspeed/host_subset.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/actions.hpp"
@@ -212,7 +213,7 @@ private:
     bool pollRecent(std::int64_t nowMs);
     bool rediscover(std::int64_t nowMs, std::int64_t todayStartMs);
     void resolveParents();
-    std::optional<std::pair<std::int64_t, std::int64_t>> stampOf(const Tracked& file) const;
+    std::optional<fsx::Stat> stampOf(const Tracked& file) const;
     void addNewOmpRoots();
     void addNewPiRoots();
     void addNewCodexHomeRoots();

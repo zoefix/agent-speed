@@ -103,6 +103,9 @@ Agent Speed は、agent がすでにローカルに書き出している記録�
 | ZCode | `~/.zcode/cli/db/db.sqlite`（または `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
 | Kimi Code CLI（TypeScript v2） | `~/.kimi-code/sessions`（または `$KIMI_CODE_HOME/sessions`） |
 | Grok Build | `~/.grok/sessions`（または `$GROK_HOME/sessions`） |
+| OpenBitFun | `~/.openbitfun/projects` (`OPENBITFUN_HOME` / `OPENBITFUN_E2E_HOME`) |
+
+macOS、Windows、Linux のいずれでも、OpenBitFun の日別使用量記録とモデルラウンドの所要時間を自動で読み取ります。各試行は一度だけ数えます。ラウンドの速度には、最初のトークンを待つ時間と、そのラウンド内の再試行が含まれます。使用量記録がないセッションでは、完了時刻を含む既存の診断用リクエスト追跡（`usage_only` または `full`）を使用します。
 
 Grok Build のターン別・モデル別バッチに保存されたトークン数、API 所要時間、実際の呼び出し回数を、既存の速度エンジンで計算します。サブエージェントの使用量は親に集約されるため一度だけ計上し、子の動作状態も表示します。個々の呼び出しのタイムラインは保存されないため、バッチ内の並列実行速度は復元できません。
 

@@ -171,6 +171,7 @@ public class DisplayTextTests
     [InlineData(SourceKind.Qoder, "source.qoder", "Qoder IDE")]
     [InlineData(SourceKind.QoderCli, "source.qoderCli", "Qoder CLI")]
     [InlineData(SourceKind.CodeBuddyCode, "source.codebuddyCode", "CodeBuddy Code")]
+    [InlineData(SourceKind.OpenBitFun, "source.openbitfun", "OpenBitFun")]
     public void EverySourceHasItsOwnName(SourceKind source, string key, string english)
     {
         Assert.Equal(key, DisplayText.SourceKey(source));

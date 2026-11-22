@@ -114,6 +114,7 @@ RootFamily familyOf(SourceKind source) {
         case SourceKind::Qoder: return RootFamily::Qoder;
         case SourceKind::QoderCli: return RootFamily::QoderCli;
         case SourceKind::CodeBuddyCode: return RootFamily::CodeBuddyCode;
+        case SourceKind::OpenBitFun: return RootFamily::OpenBitFun;
         default: return RootFamily::Claude;
     }
 }
@@ -348,6 +349,7 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         case RootFamily::Qoder: return qoder::Root::database(qoder::automaticDatabases(environment, home).front()).displayFolder();
         case RootFamily::QoderCli: return qoder::cliRoots(environment, home).front();
         case RootFamily::CodeBuddyCode: return codebuddy::automaticRoot(environment, home);
+        case RootFamily::OpenBitFun: return fsx::join(env("OPENBITFUN_HOME").value_or(env("OPENBITFUN_E2E_HOME").value_or(home + "/.openbitfun")), "projects");
     }
     return {};
 }

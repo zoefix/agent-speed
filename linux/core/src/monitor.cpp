@@ -1,4 +1,5 @@
 #include "agentspeed/monitor.hpp"
+#include "agentspeed/openbitfun.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -49,7 +50,7 @@ std::int64_t nextEpoch() {
 
 std::set<SourceKind> MonitorConfig::allSources() {
     std::set<SourceKind> all;
-    for (int k = 0; k <= static_cast<int>(SourceKind::CodeBuddyCode); ++k) all.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::OpenBitFun); ++k) all.insert(static_cast<SourceKind>(k));
     return all;
 }
 
@@ -103,6 +104,7 @@ bool Monitor::familyEnabled(RootFamily family) const {
         case RootFamily::Qoder: return e.contains(SourceKind::Qoder);
         case RootFamily::QoderCli: return e.contains(SourceKind::QoderCli);
         case RootFamily::CodeBuddyCode: return e.contains(SourceKind::CodeBuddyCode);
+        case RootFamily::OpenBitFun: return e.contains(SourceKind::OpenBitFun);
     }
     return false;
 }
@@ -414,21 +416,20 @@ void Monitor::setRemoteResponseLimit(std::size_t limit) { store_->setRemoteLimit
 
 void Monitor::setResponseObserver(std::function<void(const ParsedResponse&, bool)> observer) { store_->setObserver(std::move(observer)); }
 
-std::optional<std::pair<std::int64_t, std::int64_t>> Monitor::stampOf(const Tracked& file) const {
+std::optional<fsx::Stat> Monitor::stampOf(const Tracked& file) const {
     const auto& path = file.tailer->path();
     if (dynamic_cast<const DatabaseTailer*>(file.tailer.get())) {
         const auto stamp = sqlite::stampOf(path);
         if (!stamp) return std::nullopt;
-        return std::make_pair(stamp->length(), stamp->lastWriteNs());
+        return fsx::Stat{.length = stamp->length(), .writeNs = stamp->lastWriteNs()};
     }
-    const auto s = fsx::statOf(path, true);
+    auto s = file.parser->source() == SourceKind::OpenBitFun ? openbitfun::statOf(path) : fsx::statOf(path, true);
     if (!s || !s->regular) return std::nullopt;
-    auto writeNs = s->writeNs;
-    if (dynamic_cast<const GrokParser*>(file.parser.get())) writeNs = grokModifiedNs(path, writeNs);
+    if (dynamic_cast<const GrokParser*>(file.parser.get())) s->writeNs = grokModifiedNs(path, s->writeNs);
     if (dynamic_cast<const droid::Parser*>(file.parser.get())) {
-        if (const auto sidecar = fsx::statOf(droid::sidecarOf(path)); sidecar && sidecar->regular) writeNs = std::max(writeNs, sidecar->writeNs);
+        if (const auto sidecar = fsx::statOf(droid::sidecarOf(path)); sidecar && sidecar->regular) s->writeNs = std::max(s->writeNs, sidecar->writeNs);
     }
-    return std::make_pair(s->length, writeNs);
+    return s;
 }
 
 bool Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
@@ -491,7 +492,9 @@ bool Monitor::pollRecent(std::int64_t nowMs) {
         if (!stamp) {
             remove(path);
             changed = true;
-        } else if (file.dirty || stamp->first != file.knownLength || stamp->second != file.knownWriteNs) {
+        } else if (const auto* session = dynamic_cast<const openbitfun::Parser*>(file.parser.get());
+                   file.dirty || stamp->length != file.knownLength || stamp->writeNs != file.knownWriteNs ||
+                   (session && session->contentSignature() != stamp->contentSignature)) {
             changed |= readLive(file);
         }
     }
@@ -530,7 +533,9 @@ bool Monitor::rediscover(std::int64_t nowMs, std::int64_t todayStartMs) {
             const auto it = files_.find(found.path);
             if (it == files_.end()) {
                 changed |= addRuntimeFile(r, found, todayStartMs);
-            } else if (found.length != it->second->knownLength || found.writeNs != it->second->knownWriteNs) {
+            } else if (const auto* session = dynamic_cast<const openbitfun::Parser*>(it->second->parser.get());
+                       found.length != it->second->knownLength || found.writeNs != it->second->knownWriteNs ||
+                       (session && session->contentSignature() != found.contentSignature)) {
                 changed |= readLive(*it->second);
             }
         }
@@ -618,7 +623,7 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
     }
     const bool mainOnly = kind == SourceKind::WorkBuddy || kind == SourceKind::WorkBuddyAi || kind == SourceKind::Kimi ||
                           kind == SourceKind::GrokBuild || kind == SourceKind::Pi || kind == SourceKind::Droid ||
-                          kind == SourceKind::QoderCli || kind == SourceKind::CodeBuddyCode;
+                          kind == SourceKind::QoderCli || kind == SourceKind::CodeBuddyCode || kind == SourceKind::OpenBitFun;
     int count = 0;
     for (const auto& [path, file] : files_) {
         const auto& p = *file->parser;

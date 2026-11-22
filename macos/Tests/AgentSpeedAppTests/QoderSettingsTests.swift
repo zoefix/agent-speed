@@ -23,7 +23,7 @@ struct QoderSettingsTests {
         #expect(settings.isEnabled(.qoder) && settings.isEnabled(.qoderCli) && !settings.isEnabled(.devin))
         #expect(settings.sourceLocations[.qoder] == [.automatic] && settings.sourceLocations[.qoderCli] == [.automatic])
         #expect(SourceKind.qoder.transcriptFolder == .qoder && SourceKind.qoderCli.transcriptFolder == .qoderCli)
-        #expect(TranscriptFolder.allCases.suffix(3) == [.qoder, .qoderCli, .codebuddyCode])
+        #expect(TranscriptFolder.allCases.suffix(4) == [.qoder, .qoderCli, .codebuddyCode, .openbitfun])
     }
 
     @Test func theAutomaticEntriesNameBothEditions() {

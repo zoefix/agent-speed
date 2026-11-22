@@ -12,6 +12,7 @@ struct FileStat: Equatable, Sendable {
     var identity: FileIdentity
     var size: Int64
     var modifiedNs: Int64
+    var contentSignature: Int64 = 0
     var isRegularFile: Bool
     var isDirectory: Bool
 

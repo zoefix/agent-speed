@@ -5,7 +5,7 @@
   python3 spec/tools/reference.py --dump-today [--codex PATH] [--claude PATH] [--dsh PATH] [--gemini PATH]
                                               [--omp PATH] [--pi PATH] [--antigravity PATH] [--workbuddy PATH]
                                               [--workbuddy-ai PATH] [--openclaw PATH] [--hermes PATH]
-                                              [--droid PATH] [--devin PATH] [--qoder PATH] [--qoder-cli PATH]
+                                              [--droid PATH] [--devin PATH] [--qoder PATH] [--qoder-cli PATH] [--openbitfun PATH]
   python3 spec/tools/reference.py --dump-history [--utc] [--prices PATH] [...]
   python3 spec/tools/reference.py --write-history-fixture
   python3 spec/tools/reference.py --dump-unpriced [--days N | --first YYYY-MM-DD --last YYYY-MM-DD | --live]
@@ -45,6 +45,7 @@ import prices as pricing  # noqa: E402
 import harness_reference as harnesses  # noqa: E402
 import devin_reference as devin  # noqa: E402
 import qoder_reference as qoder  # noqa: E402
+import openbitfun_reference as openbitfun  # noqa: E402
 import unpriced as diagnostics  # noqa: E402
 import execution_modes_reference as modes  # noqa: E402
 import tool_actions  # noqa: E402
@@ -775,6 +776,8 @@ def zst_stream_lines(path):
 
 
 def process_file(state, dedupe, start_offset=0, max_lines=None):
+    if state.source == "openbitfun":
+        return openbitfun.read(state, dedupe)
     if state.source == "gemini" and state.path.endswith(".json"):
         return gemini_legacy(state, dedupe)
     if state.source == "droid":
@@ -822,11 +825,17 @@ def resolve_parents(states):
         parts = re.split(r"[\\/]", s.path)
         if len(parts) >= 2 and parts[-2] == "chats":
             gemini_mains.setdefault((os.sep.join(parts[:-1]), GEMINI_SANITIZE.sub("_", s.thread_id)), s.path)
+    bitfun_sessions = {}
+    for s in sorted(states, key=lambda s: (s.file_created or 0, s.path)):
+        if s.source == "openbitfun" and s.thread_id:
+            bitfun_sessions.setdefault(s.thread_id, s.path)
     parents = {}
     for s in states:
         parent = None
         if s.source == "codex":
             parent = by_thread.get(s.parent_thread_id) if s.parent_thread_id else None
+        elif s.source == "openbitfun":
+            parent = bitfun_sessions.get(s.parent_thread_id)
         elif s.source == "deepseek":
             parent = by_session.get(s.parent_session) if s.parent_session else None
         elif s.source == "gemini":
@@ -3971,6 +3980,7 @@ def check_fixtures():
     failures += ["harnesses: " + e for e in harnesses.check_fixtures(root)]
     failures += devin.check_fixtures(root)
     failures += qoder.check_fixtures(root)
+    failures += openbitfun.check_fixtures(root)
     attribution = json.load(open(os.path.join(root, "model-attribution-cases.json"), encoding="utf-8"))
     failures += ["model attribution: " + e for e in check_model_attribution(attribution)]
     created = sorted(set(tree()) - set(files_before))
@@ -4749,7 +4759,7 @@ def discover(root, limit=20_000, deepseek=False, codex=False):
 
 def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                   limit=20_000, include_archived=False, pi_dirs=(), openclaw_dbs=(), codex_roots=None, droid_roots=(),
-                  qoder_cli_roots=()):
+                  qoder_cli_roots=(), openbitfun_roots=()):
     """(time, path, source, root) of every discovered file and Antigravity or OpenClaw database, in startup order (5);
     the root (omp root or WorkBuddy `projects`) decides sub-agents by folder structure. `codex_roots` replaces the
     automatic Codex roots (the Codex setting); by default they are `codex_root` and the Codex homes OpenClaw keeps next
@@ -4773,15 +4783,16 @@ def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=()
     files += [(p, "openclaw", None) for p in OrderedDict.fromkeys(openclaw_dbs)]
     files += [(p, "droid", None) for r in OrderedDict.fromkeys(droid_roots) for p in discover_droid(r, limit=limit)]
     files += [(p, "qoderCli", None) for r in OrderedDict.fromkeys(qoder_cli_roots) for p in discover(r, limit=limit)]
+    files += [(p, "openbitfun", r) for r in OrderedDict.fromkeys(openbitfun_roots) for p in openbitfun.discover(r, limit)]
     timed = {(ag_mtime(p) if s in ("antigravity", "openclaw") else droid_mtime(p) if s == "droid"
-              else os.path.getmtime(p), p, s, r) for p, s, r in files}
+              else openbitfun.modified(p) if s == "openbitfun" else os.path.getmtime(p), p, s, r) for p, s, r in files}
     return sorted(timed, key=lambda t: (t[0], t[1]))
 
 
 def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
                codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None, devin_locations=(),
-               qoder_locations=(), qoder_cli_roots=()):
+               qoder_locations=(), qoder_cli_roots=(), openbitfun_roots=()):
     """Today's responses as the engine seeds them (the `--dump-today` rows), with files and bytes read; `agents_out`
     receives the parser state of every seeded agent (METRICS 6.9)."""
     index = pricing.Index(pricing.load(table))
@@ -4789,7 +4800,7 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
     today_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
     files = startup_files(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, pi_dirs=pi_dirs,
                           openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, droid_roots=droid_roots,
-                          qoder_cli_roots=qoder_cli_roots)
+                          qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots)
     dedupe = Deduper()
     rows, read_files, read_bytes = [], 0, 0
     for mtime, path, source, root in files:
@@ -4872,14 +4883,14 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
 def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
                codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None, devin_locations=(), qoder_locations=(),
-               qoder_cli_roots=()):
+               qoder_cli_roots=(), openbitfun_roots=()):
     started = time.time()
     seeded = []
     rows, read_files, read_bytes = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores,
                                               wb_roots, table, zcode_root, kimi_root, grok_root, pi_dirs, openclaw_dbs,
                                               codex_roots, hermes_dirs, droid_roots, agents_out=seeded,
                                               devin_locations=devin_locations, qoder_locations=qoder_locations,
-                                              qoder_cli_roots=qoder_cli_roots)
+                                              qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots)
     for r in rows:
         print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
     now = now_ms if now_ms is not None else int(time.time() * 1000)
@@ -4901,14 +4912,14 @@ def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
 def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), omp_dirs=(), ag_stores=(),
                 wb_roots=(), include_archived=True, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(),
                 openclaw_dbs=(), codex_roots=None, hermes_dirs=(), hermes_tz=None, droid_roots=(), droid_memory=None,
-                droid_skipped=None, perf_out=None, devin_locations=(), qoder_locations=(), qoder_cli_roots=()):
+                droid_skipped=None, perf_out=None, devin_locations=(), qoder_locations=(), qoder_cli_roots=(), openbitfun_roots=()):
     """Parses every log completely (METRICS 8) and returns all responses with their source and agent. A Droid session
     whose parent counters are unknown is skipped (listed in `droid_skipped`); `droid_memory` keeps the signatures of
     unreadable parent sidecars from one analysis to the next (METRICS 4.16 Own counters). `perf_out` receives every
     agent's completions for the performance history (METRICS 6.11)."""
     files = startup_files(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                           limit=10 ** 9, include_archived=include_archived, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
-                          codex_roots=codex_roots, droid_roots=droid_roots, qoder_cli_roots=qoder_cli_roots)
+                          codex_roots=codex_roots, droid_roots=droid_roots, qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots)
     dedupe = Deduper(limit=10 ** 9)
     out = []
     for _, path, source, root in files:
@@ -5081,6 +5092,7 @@ def main():
     parser.add_argument("--source", default=None, help="--dump-unpriced: one source id (METRICS 1)")
     parser.add_argument("--live", action="store_true",
                         help="--dump-unpriced: today's engine responses (Settings -> Cost) instead of the history")
+    parser.add_argument("--openbitfun", action="append", help="OpenBitFun data or projects folder (repeatable)")
     parser.add_argument("--now", type=int, default=None,
                         help="--dump-today: evaluate the performance scores at this Unix ms instead of the capture time")
     args = parser.parse_args()
@@ -5111,6 +5123,8 @@ def main():
     qoder_locations = args.qoder or ["@auto"]
     qoder_cli_roots = list(OrderedDict.fromkeys(root for location in args.qoder_cli or ["@auto"] for root in (
         qoder.cli_roots() if location == "@auto" else [qoder.cli_location(location)])))
+    openbitfun_roots = [str(openbitfun.projects(path)) for path in args.openbitfun or [
+        os.environ.get("OPENBITFUN_HOME") or os.environ.get("OPENBITFUN_E2E_HOME") or os.path.join(home, ".openbitfun")]]
     if args.write_history_fixture:
         write_history_fixture()
         return
@@ -5131,7 +5145,7 @@ def main():
                                     args.prices, zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs,
                                     openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
                                     droid_roots=droid_roots, devin_locations=devin_locations,
-                                    qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots)
+                                    qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots)
             parts = diagnostics.live_parts([(r["source"], r) for r in rows], first)
         else:
             parts = diagnostics.history_parts(daily_history(
@@ -5139,7 +5153,7 @@ def main():
                             zcode_root=zcode_root, kimi_root=kimi_root, grok_root=grok_root, pi_dirs=pi_dirs,
                             openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
                             droid_roots=droid_roots, devin_locations=devin_locations,
-                            qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots),
+                            qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots),
                 day_pricing=pricing.DayPricing([pricing.load(args.prices)])))
         dump_unpriced(parts, args.prices, view, first, last, args.source)
         return
@@ -5150,7 +5164,7 @@ def main():
                                          grok_root=grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
                                          codex_roots=codex_roots, hermes_dirs=hermes_dirs, droid_roots=droid_roots,
                                          perf_out=agents, devin_locations=devin_locations,
-                                         qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots),
+                                         qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots),
                              tz=timezone.utc if args.utc else None,
                              day_pricing=pricing.DayPricing([pricing.load(args.prices)]))
         for row in rows:
@@ -5164,7 +5178,7 @@ def main():
         dump_today(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, args.prices,
                    zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs, codex_roots=codex_roots,
                    hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now, devin_locations=devin_locations,
-                   qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots)
+                   qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots, openbitfun_roots=openbitfun_roots)
     else:
         parser.print_help()
 

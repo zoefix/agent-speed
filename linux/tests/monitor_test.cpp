@@ -35,6 +35,7 @@ MonitorConfig fixtureConfig(std::set<SourceKind> enabled) {
     s.qoder = fixturePath("qoder/home/Library/Application Support/Qoder");
     s.qoderCli = fixturePath("qoder-cli");
     s.codeBuddyCode = fixturePath("codebuddy");
+    s.openBitFun = fixturePath("openbitfun/projects");
     MonitorConfig config;
     config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");
     config.enabled = std::move(enabled);
@@ -48,6 +49,21 @@ const SourceRow& rowOf(const Snapshot& snap, SourceKind kind) {
 }
 
 }  // namespace
+
+TEST(Monitor, OpenBitFunSessionsReachTheLiveMonitorWithSeparateChildRequests) {
+    Monitor monitor(fixtureConfig({SourceKind::OpenBitFun}));
+    const auto now = kDayStart + 43'213'000;
+    monitor.start(now, kDayStart);
+    const auto snap = monitor.snapshot(now, kDayStart);
+    EXPECT_EQ(snap.todayRequests, 4);
+    EXPECT_EQ(snap.todayOutput, 240);
+    EXPECT_TRUE(rowOf(snap, SourceKind::OpenBitFun).available);
+    bool child = false;
+    for (const auto& [id, agent] : monitor.agents()) {
+        if (agent.source == SourceKind::OpenBitFun && agent.isSubagent && monitor.parentOf(id)) child = true;
+    }
+    EXPECT_TRUE(child);
+}
 
 TEST(Monitor, HarnessesReachTheLiveMonitor) {
     Monitor monitor(fixtureConfig({SourceKind::ZCode, SourceKind::Kimi, SourceKind::GrokBuild}));

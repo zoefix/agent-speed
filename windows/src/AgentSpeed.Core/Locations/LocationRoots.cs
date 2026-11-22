@@ -39,6 +39,7 @@ internal static class LocationRoots
         LocationFolder.Qoder => Qoder.QoderPaths.AutomaticDatabases(),
         LocationFolder.QoderCli => Qoder.QoderCliPaths.AutomaticRoots(),
         LocationFolder.CodeBuddyCode => [WorkBuddy.CodeBuddyCodePaths.AutomaticRoot()],
+        LocationFolder.OpenBitFun => [LiveMonitor.DefaultOpenBitFunRoot],
         _ => [],
     };
 
@@ -54,6 +55,7 @@ internal static class LocationRoots
         LocationFolder.Droid => Droid.DroidPaths.RootOf(path),
         LocationFolder.QoderCli => Qoder.QoderCliPaths.RootOf(path),
         LocationFolder.CodeBuddyCode => WorkBuddy.CodeBuddyCodePaths.RootOf(path),
+        LocationFolder.OpenBitFun => OpenBitFun.OpenBitFunFiles.ProjectsOf(path),
         _ => path,
     };
 

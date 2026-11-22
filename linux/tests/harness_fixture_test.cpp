@@ -2,12 +2,16 @@
 
 #include <algorithm>
 #include <map>
+#include <thread>
 
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/grok_parser.hpp"
 #include "agentspeed/kimi_parser.hpp"
+#include "agentspeed/openbitfun.hpp"
+#include "agentspeed/report_values.hpp"
 #include "agentspeed/zcode.hpp"
 #include "fixture_support.hpp"
+#include "devin_test_support.hpp"
 
 using namespace agentspeed;
 namespace fs = std::filesystem;
@@ -178,6 +182,134 @@ TEST(HarnessFixtures, KimiWireVariantsAndForkMirrorsShareOneRequestIdentity) {
     fixtures::JsonFile expected(fixtures::fixtureDir() / "harness-expected.json");
     ASSERT_TRUE(expected.ok);
     replayFiles<KimiParser>(expected.root()["kimi"], true, [](KimiParser&, Latest&) {});
+}
+
+TEST(HarnessFixtures, OpenBitFunTracesUseAttemptTimingAndDeduplicateCopies) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "openbitfun-expected.json");
+    ASSERT_TRUE(expected.ok);
+    Deduper deduper;
+    for (const auto& file : expected.root()["files"].elements()) {
+        const auto path = *fixturePath(file["path"]);
+        SCOPED_TRACE(path);
+        openbitfun::Parser parser(path, deduper);
+        openbitfun::SessionTailer reader(path);
+        Latest sink;
+        reader.read(parser, sink);
+        expectResponses(file["responses"], sink.latest());
+        EXPECT_EQ(parser.project(), fixtures::optString(file["project"]));
+        EXPECT_EQ(parser.isSubagent(), file["isSubagent"].isTrue());
+        EXPECT_EQ(parser.link().parentThreadId, fixtures::optString(file["parent"]));
+        EXPECT_EQ(parser.phase() == Phase::Generating, file["phase"].string() == "generating");
+        EXPECT_EQ(static_cast<std::size_t>(sink.completions), sink.order.size());
+        EXPECT_EQ(reader.read(parser, sink).bytesRead, 0);
+    }
+}
+
+TEST(HarnessFixtures, OpenBitFunLedgerRoundsUseDistinctAttemptsAndStopAtTurnEnd) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "openbitfun-expected.json");
+    const auto fixture = expected.root()["ledger"];
+    const auto path = fixturePath(fixture["metadata"]).value();
+    openbitfun::UsageLedger ledger(fixturePath(fixture["root"]).value());
+    const auto turn = fixtures::readText(fs::path(path).parent_path() / "turns/turn-000001.json");
+    const auto statusAt = turn.find("inprogress");
+    ASSERT_NE(statusAt, std::string::npos);
+    devin_test::TempDir empty;
+    openbitfun::UsageLedger noLedger(empty.file("missing"));
+    for (const auto* status : {"completed", "cancelled", "error"}) {
+        for (const auto useLedger : {true, false}) {
+            SCOPED_TRACE(status);
+            SCOPED_TRACE(useLedger);
+            Deduper deduper;
+            openbitfun::Parser parser(path, deduper);
+            openbitfun::SessionTailer reader(path, useLedger ? ledger : noLedger);
+            Latest sink;
+            reader.read(parser, sink);
+            if (useLedger) expectResponses(fixture["responses"], sink.latest());
+            else {
+                ASSERT_EQ(sink.order.size(), 1u);
+                EXPECT_EQ(sink.latest().front().tokens.output, 25);
+            }
+            EXPECT_EQ(parser.phase(), Phase::Generating);
+            EXPECT_EQ(parser.inFlightStartMs(), 1'792'497'605'000);
+            EXPECT_EQ(reader.read(parser, sink).bytesRead, 0);
+            auto ended = turn;
+            ended.replace(statusAt, std::string_view("inprogress").size(), status);
+            parser.feed(ended, sink);
+            parser.applyRounds(sink);
+            EXPECT_EQ(parser.phase(), Phase::Idle);
+            EXPECT_FALSE(parser.inFlightStartMs());
+            EXPECT_EQ(sink.completions, 1);
+        }
+    }
+}
+
+TEST(HarnessFixtures, OpenBitFunLedgerRevisionsAndLargeTurnDocuments) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "openbitfun-expected.json");
+    const auto fixture = expected.root()["ledger"];
+    devin_test::TempDir temp;
+    const fs::path source = *fixturePath(fixture["metadata"]);
+    fs::copy(source.parent_path(), temp.file("session"), fs::copy_options::recursive);
+    const auto oversized = temp.write("session/turns/turn-000000.json", "");
+    fs::resize_file(oversized, (64ULL << 20) + 1);
+    const auto path = temp.file("session/metadata.json");
+    openbitfun::UsageLedger ledger(temp.path.string());
+    openbitfun::SessionTailer reader(path, ledger);
+    Deduper deduper;
+    openbitfun::Parser parser(path, deduper);
+    struct Reporting : Latest {
+        report::Ledger report;
+        void onResponse(const ParsedResponse& r, bool completion) override {
+            Latest::onResponse(r, completion);
+            if (completion) report.count(r, std::nullopt, "gpt-5");
+            else report.grow(r, std::nullopt, "gpt-5");
+        }
+    } sink;
+    const auto check = [&](int requests, int output, int reportedRequests, int reportedOutput) {
+        reader.read(parser, sink);
+        int64_t count = 0, tokens = 0;
+        for (const auto& r : sink.latest()) {
+            count += r.requestCount;
+            tokens += r.tokens.output;
+        }
+        EXPECT_EQ(count, requests);
+        EXPECT_EQ(tokens, output);
+        EXPECT_EQ(sink.report.counters().total().requests, reportedRequests);
+        EXPECT_EQ(sink.report.counters().total().output, reportedOutput);
+    };
+    const auto waitForScan = [] { std::this_thread::sleep_for(std::chrono::milliseconds(1100)); };
+    check(1, 25, 1, 25);
+    const auto daily = temp.file("2026-10-20.json");
+    fs::copy_file(fs::path(*fixturePath(fixture["root"])) / "2026-10-20.json", daily);
+    waitForScan();
+    check(2, 200, 2, 200);
+    const auto own = ledger.forSession("session"), other = ledger.forSession("other");
+    fixtures::JsonFile document(daily);
+    auto rows = document.root()["records"].elements();
+    const auto writeRows = [&] {
+        std::string text = R"({"records":[)";
+        for (const auto& row : rows) {
+            if (text.back() != '[') text += ',';
+            text += row.raw();
+        }
+        temp.write("2026-10-20.json", text + "]}");
+    };
+    rows.pop_back(); // The last row belongs to the other session.
+    writeRows();
+    waitForScan();
+    EXPECT_EQ(own, ledger.forSession("session"));
+    EXPECT_NE(other, ledger.forSession("other"));
+    EXPECT_EQ(reader.read(parser, sink).bytesRead, 0);
+    rows.erase(rows.begin() + 1);
+    writeRows();
+    waitForScan();
+    check(0, 0, 2, 200);
+    const auto revised = ledger.forSession("session");
+    openbitfun::UsageLedger reopened(temp.path.string());
+    EXPECT_NE(revised->signature, own->signature);
+    EXPECT_EQ(revised->signature, reopened.forSession("session")->signature);
+    fs::remove(daily);
+    waitForScan();
+    check(1, 25, 2, 200);
 }
 
 TEST(HarnessFixtures, GrokBatchesExcludeChildRollupsAndForkCopies) {

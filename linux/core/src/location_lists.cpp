@@ -12,7 +12,7 @@ namespace agentspeed {
 
 namespace {
 
-constexpr std::array<std::pair<RootFamily, std::string_view>, 20> kNames = {{
+constexpr std::array<std::pair<RootFamily, std::string_view>, 21> kNames = {{
     {RootFamily::Codex, "codex"},
     {RootFamily::Claude, "claude"},
     {RootFamily::DeepSeek, "dsh"},
@@ -33,6 +33,7 @@ constexpr std::array<std::pair<RootFamily, std::string_view>, 20> kNames = {{
     {RootFamily::Qoder, "qoder"},
     {RootFamily::QoderCli, "qoderCli"},
     {RootFamily::CodeBuddyCode, "codebuddyCode"},
+    {RootFamily::OpenBitFun, "openbitfun"},
 }};
 
 const LocationList& automaticOnly() {
@@ -100,6 +101,7 @@ LocationLists::LocationLists(const RootSettings& s) {
         {RootFamily::Qoder, &s.qoder},
         {RootFamily::QoderCli, &s.qoderCli},
         {RootFamily::CodeBuddyCode, &s.codeBuddyCode},
+        {RootFamily::OpenBitFun, &s.openBitFun},
     };
     for (const auto& [family, path] : chosen) {
         if (*path) set(family, {DataLocation::at(**path)});

@@ -25,6 +25,7 @@ extension SourceKind {
         case .qoder: RGBColor(hex: 0xB3329D)
         case .qoderCli: RGBColor(hex: 0x7E61B6)
         case .codebuddyCode: RGBColor(hex: 0x18AB06)
+        case .openbitfun: RGBColor(hex: 0xF800F8)
         }
     }
 
