@@ -39,6 +39,7 @@
  "rig": {
   "tail": true,
   "legsInSkirt": true,
-  "tailSwing": 0.5
+  "tailSwing": 0.15,
+  "poseSwing": {"think": {"Angle": 0.4}, "wait": {"Skirt": 0.3}}
  }
 }

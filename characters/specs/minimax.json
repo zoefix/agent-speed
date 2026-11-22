@@ -38,6 +38,13 @@
   ]
  },
  "rig": {
-  "rigidLower": true
+  "rigidLower": true,
+  "poseSwing": {
+   "overdrive": {"Angle": 0.3},
+   "sleepy": {"Angle": 0.4},
+   "boost": {"Angle": 0.5},
+   "cruise": {"Wrist.right": 0.4},
+   "focus": {"Arm.right": 0.3, "Forearm.right": 0.3}
+  }
  }
 }

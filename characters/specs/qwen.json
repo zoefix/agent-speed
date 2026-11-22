@@ -46,6 +46,7 @@
   ]
  },
  "rig": {
-  "legsInSkirt": true
+  "legsInSkirt": true,
+  "swing": {"Skirt": 0.3, "Hip": 0.5, "Wrist.right": 0.4}
  }
 }

@@ -42,6 +42,7 @@
  },
  "rig": {
   "ears": true,
-    "tail": true
+    "tail": true,
+  "poseSwing": {"idle": {"Angle": 0.5}, "sleepy": {"Angle": 0.5}, "boost": {"Tail": 0.4, "Arm.right": 0.4, "Shoulder.right": 0.4}}
  }
 }

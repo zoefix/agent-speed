@@ -39,6 +39,15 @@
  },
  "rig": {
   "toy": true,
+  "swing": {"Hip": 0.3, "Foot": 0.3, "Skirt": 0.4},
+  "poseSwing": {
+   "wait": {"Angle": 0.3, "Arm": 0.2, "Forearm": 0.2, "Shoulder": 0.3, "Body": 0.3},
+   "cheer": {"Body": 0.4},
+   "think": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3},
+   "boost": {"Angle": 0.5},
+   "redline": {"Angle": 0.5},
+   "sleepy": {"Angle": 0.5}
+  },
   "props": {
    "idle": [[0.3672, 0.3359], [0.3516, 0.25], [0.3008, 0.3125]],
    "cruise": [[0.4375, 0.2578], [0.4141, 0.1875], [0.3711, 0.2344]],

@@ -40,6 +40,8 @@
   }
  },
  "rig": {
-  "legsInSkirt": true
+  "legsInSkirt": true,
+  "swing": {"HairBack": 0.4},
+  "poseSwing": {"boost": {"Skirt": 0.3, "Arm.right": 0.3, "Forearm.right": 0.3}}
  }
 }

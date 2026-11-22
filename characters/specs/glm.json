@@ -38,8 +38,9 @@
  },
  "rig": {
   "tail": true,
-  "tailSwing": 0.5,
+  "tailSwing": 0.3,
   "ears": true,
-  "legsInSkirt": true
+  "legsInSkirt": true,
+  "swing": {"HairBack": 0.4}
  }
 }

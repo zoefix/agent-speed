@@ -44,8 +44,15 @@
   "tail": true,
   "wings": true,
   "legsInSkirt": true,
-  "swing": {"Arm.right": 0.1, "Forearm.right": 0.1, "Shoulder.right": 0.3, "HairBack": 0.25},
+  "swing": {"Arm.right": 0.1, "Forearm.right": 0.1, "Shoulder.right": 0.3, "HairBack": 0.25, "Wing": 0.4},
   "tailSwing": 0.5,
-  "poseSwing": {"wait": {"Skirt": 0.3}}
+  "poseSwing": {
+   "wait": {"Skirt": 0.1},
+   "think": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3},
+   "focus": {"Skirt": 0.3},
+   "boost": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3},
+   "cruise": {"HairBack": 0.1},
+   "idle": {"HairBack": 0.1}
+  }
  }
 }

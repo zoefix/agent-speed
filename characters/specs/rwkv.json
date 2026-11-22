@@ -38,6 +38,7 @@
  },
  "rig": {
   "rigidLower": true,
-  "bodyInArms": true
+  "bodyInArms": true,
+  "poseSwing": {"think": {"Arm.right": 0.3, "Forearm.right": 0.3, "Wing": 0.4}, "overdrive": {"Squash": 0.4, "Lean": 0.4, "AngleZ": 0.5}}
  }
 }

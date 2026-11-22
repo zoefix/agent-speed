@@ -45,6 +45,7 @@
   "tail": true,
   "ears": true,
   "rigidLower": true,
-  "bodyInArms": true
+  "bodyInArms": true,
+  "poseSwing": {"focus": {"Angle": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "Wrist.right": 0.3}}
  }
 }
