@@ -151,7 +151,7 @@ are darker than paper, joins the shoe layer holding most of that ring: a shin Se
 and the boots, which would show the desktop. The piece is the patch of uncovered art the blob lies in, within 12 px
 of it, opaque, as opaque as the art is dark (darkness / 0.3) on its 1 px rim against the paper, and it runs on 2 px
 under the soft edges of the layers around it (covered, under 0.99, away from the paper), so the hem's edge never
-shows a dark line across the shin), and `props` (per band, points in canvas fractions on a held object the split
+shows a dark line across the shin), and `props` (per band or mood pose, points in canvas fractions on a held object the split
 spreads over other layers, such as a doll it takes for a second head: its face in `face`, its eyes in `irides`, its
 hair in `back hair`; build option `--band` names the band). Each point asks SAM on its own; the smallest mask it scores at least 0.8 joins the object,
 closed by 3 px, with enclosed gaps under 5 % of it filled (eyes, a mouth) and larger ones left out (a hand across it).

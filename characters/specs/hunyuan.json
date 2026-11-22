@@ -42,6 +42,6 @@
  "rig": {
   "legsInSkirt": true,
   "swing": {"HairBack": 0.4},
-  "poseSwing": {"boost": {"Skirt": 0.3, "Arm.right": 0.3, "Forearm.right": 0.3}}
+  "poseSwing": {"boost": {"Skirt": 0.3, "Arm.right": 0.3, "Forearm.right": 0.3, "BodyAngleZ": 0.2}, "focus": {"HairBack": 0.25}}
  }
 }

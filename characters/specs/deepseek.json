@@ -40,6 +40,12 @@
   ]
  },
  "rig": {
-  "tail": true
+  "tail": true,
+  "poseSwing": {
+   "overdrive": {"Tail": 0.3},
+   "sleepy": {"Angle": 0.5},
+   "redline": {"Finger.right.3": 0.5},
+   "boost": {"AngleZ": 0.6, "Arm.right": 0.4}
+  }
  }
 }

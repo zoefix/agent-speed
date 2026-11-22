@@ -47,6 +47,7 @@
  },
  "rig": {
   "legsInSkirt": true,
-  "swing": {"Skirt": 0.3, "Hip": 0.5, "Wrist.right": 0.4}
+  "swing": {"Skirt": 0.15, "Hip": 0.4, "BodyAngleZ": 0.4, "Wrist.right": 0.4},
+  "poseSwing": {"overdrive": {"Arm.right": 0.25, "Forearm.right": 0.4}}
  }
 }

@@ -47,6 +47,6 @@
  },
  "rig": {
   "legsInSkirt": true,
-  "poseSwing": {"focus": {"Angle": 0.5}, "idle": {"Angle": 0.5}}
+  "poseSwing": {"focus": {"Angle": 0.5}, "idle": {"Angle": 0.5}, "cheer": {"Skirt": 0.5}}
  }
 }

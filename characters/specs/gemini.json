@@ -46,6 +46,6 @@
   "ears": true,
   "rigidLower": true,
   "bodyInArms": true,
-  "poseSwing": {"focus": {"Angle": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "Wrist.right": 0.3}}
+  "poseSwing": {"focus": {"AngleZ": 0.2, "Angle": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "Wrist.right": 0.3}, "boost": {"Arm.right": 0.5, "Forearm.right": 0.5}}
  }
 }

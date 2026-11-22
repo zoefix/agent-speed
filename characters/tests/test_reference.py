@@ -1304,6 +1304,22 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(eyes.alpha[45, 75], 1.0)
         np.testing.assert_allclose(composite(parts), before, atol=1e-5)
 
+    def test_a_toy_whose_layer_has_a_hole_under_its_eye_takes_what_shows_there(self):
+        from characters.rig.layers import _toy_features, composite
+        toy = self.layer("objects", (0.5, 0.3, 0.2), (70, 120, 122, 170))
+        toy.rgba[85:90, 126:131, 3] = 0.0
+        skin = self.layer("face", (0.95, 0.85, 0.8), (80, 96, 120, 136))
+        eye = self.layer("eyewhite", (0.1, 0.1, 0.1), (86, 89, 127, 130))
+        eye.rgba[85:90, 126:131, 3] = np.maximum(eye.rgba[85:90, 126:131, 3], 0.5)
+        parts = [toy, skin, eye]
+        before = composite(parts)
+        near = np.zeros((200, 200), bool)
+        near[60:130, 110:180] = True
+        self.assertGreater(_toy_features(parts, near, 0.5), 0)
+        self.assertEqual(toy.alpha[85, 126], 1.0)
+        self.assertEqual(skin.alpha[85, 126], 0.0)
+        np.testing.assert_allclose(composite(parts), before, atol=1e-5)
+
     def test_a_layer_grows_far_only_under_still_parts(self):
         from characters.rig.layers import grow_underlays
         torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 100))

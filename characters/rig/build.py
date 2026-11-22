@@ -117,8 +117,9 @@ PROP_FOLLOW = ("chest", "lower", "head")
 
 
 def prop_hint(hints, band):
-    """The band's prop from the `props` hint: points, or {"points", "follow"} for a prop that moves with the body
-    (a book held up before the chest, which the split also paints into the top) instead of the nearest hand."""
+    """The band's (or mood pose's) prop from the `props` hint: points, or {"points", "follow"} for a prop that moves
+    with the body (a book held up before the chest, which the split also paints into the top) instead of the nearest
+    hand."""
     prop = hints.get("props", {}).get(band) if band else None
     if isinstance(prop, dict):
         if prop.get("follow") not in (None,) + PROP_FOLLOW:
@@ -276,7 +277,8 @@ def main(argv=None):
                 p.tag = "objects"
                 print(f"{p.name}: no tail hint, rigged as an object")
     reference = layers.load_reference(args.reference, size)
-    points, follow = prop_hint(hints, args.band)
+    points, follow = prop_hint(hints, args.band or (args.name.split("-", 1)[1] if args.name and "-" in args.name
+                                                    else None))
     if points and args.sam:
         from . import segment
         prop = segment.prop_mask(reference, [(x * size[0], y * size[1]) for x, y in points], args.sam)

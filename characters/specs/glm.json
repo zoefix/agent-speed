@@ -38,9 +38,10 @@
  },
  "rig": {
   "tail": true,
-  "tailSwing": 0.3,
+  "tailSwing": 0.15,
   "ears": true,
   "legsInSkirt": true,
-  "swing": {"HairBack": 0.4}
+  "swing": {"HairBack": 0.25},
+  "poseSwing": {"overdrive": {"Angle": 0.5, "EarTwitch": 0.4}}
  }
 }

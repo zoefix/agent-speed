@@ -534,8 +534,8 @@ def features_off_face(layers, face_box, margin=0.25, enclosed=0.5, toy=False):
 def _toy_features(layers, near, enclosed):
     """A toy's eye or mouth near the face is drawn in several feature layers stacked (white, iris, lash), each piece
     ringed by the others, not by the toy: the features taken together, piece by piece, go to the held object
-    holding `enclosed` of a 2 px ring around them, composited in their order; what layers between (the face's
-    hidden skin under the toy) draw there goes, as the features hid it."""
+    holding `enclosed` of a 2 px ring around them, with everything the layers between draw there (the face's skin
+    under the toy) composited in, so the rest pose stays the same."""
     feats = [layer for layer in layers if layer.tag in FACE_TAGS and layer.tag != "face"]
     objects = [layer for layer in layers if layer.tag == "objects"]
     if not feats or not objects:
@@ -558,15 +558,17 @@ def _toy_features(layers, near, enclosed):
         if any(layers.index(f) < at for f in mine):
             continue
         top = max(layers.index(f) for f in mine)
-        for layer in layers[at + 1:top]:
-            if layer not in mine:
-                layer.rgba[..., 3][piece] = 0.0
-        for f in sorted(mine, key=layers.index):
-            a, t = f.alpha[piece][:, None], target.alpha[piece][:, None]
-            total = a + t * (1 - a)
-            color = (f.rgba[piece][:, :3] * a + target.rgba[piece][:, :3] * t * (1 - a)) / np.maximum(total, 1e-6)
-            target.rgba[piece] = np.concatenate([color, total], axis=1)
-            f.rgba[..., 3][piece] = 0.0
+        # Everything drawn there from the toy up to the topmost feature goes into the toy as it shows, so the rest
+        # pose stays the same and the toy keeps no hole where its face was (a teal ring once it moved).
+        ys, xs = np.nonzero(piece)
+        box = (slice(ys.min(), ys.max() + 1), slice(xs.min(), xs.max() + 1))
+        stack = layers[at:top + 1]
+        color, cover = _over(stack, box)
+        here = piece[box]
+        straight = color / np.maximum(cover, 1e-6)[..., None]
+        target.rgba[box][here] = np.concatenate([straight, cover[..., None]], axis=-1)[here]
+        for layer in stack[1:]:
+            layer.rgba[box][..., 3][here] = 0.0
         moved += int(piece.sum())
     return moved
 

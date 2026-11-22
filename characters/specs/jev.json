@@ -46,8 +46,5 @@
    "spin"
   ]
  },
- "rig": {
-  "rigidLower": true,
-  "bodyInArms": true
- }
+ "rig": {"rigidLower": true, "bodyInArms": true, "poseSwing": {"idle": {"HairBack": 0.5}, "cheer": {"HairBack": 0.5}, "sleepy": {"AngleZ": 0.4}}}
 }

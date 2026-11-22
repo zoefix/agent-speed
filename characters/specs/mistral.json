@@ -40,6 +40,7 @@
   "tail": true,
   "legsInSkirt": true,
   "tailSwing": 0.15,
-  "poseSwing": {"think": {"Angle": 0.4}, "wait": {"Skirt": 0.3}}
+  "swing": {"HairBack": 0.4},
+  "poseSwing": {"think": {"Angle": 0.4}, "wait": {"Skirt": 0.3}, "cruise": {"Tail": 0.5, "HairBack": 0.3, "Arm.right": 0.4, "Forearm.right": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4}}
  }
 }
