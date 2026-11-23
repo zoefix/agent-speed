@@ -33,7 +33,8 @@ FACE_HAND_SWING = 0.05
 # A hand lying on the body, the clothes or an object (rather than out over the stage): its arm keeps to this much, as
 # what the hand hides there is a guess too (a dark smear on the chest, the old hand's outline on a book).
 BODY_HAND_SWING = 0.25
-# Parameters a `swing` hint may not scale: a variant's lead turns the old arm by Lift and Bend toward the new one.
+# Parameters a `swing` hint scales only when it names them: a variant's lead turns the old arm by Lift and Bend toward
+# the new one, and an `Arm` prefix must not shorten it (a hint `Lift.right` may, when the old arm carries a toy).
 UNSCALED = ("Lift.", "Bend.", "Var.")
 # Turns of the back hair and of a lock or braid at ±1, in degrees per segment: what they hide is a guess, so they
 # swing no farther than a lively sway needs (they were 14/12, 20/24).
@@ -188,8 +189,9 @@ def build(lm, bone_names, tail_swing=1.0, swing=None):
                              stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
     appendage_controls(lm, has, fw, params, drivers, physics, tail_swing)
     for d in drivers:
-        factor = next((f for prefix, f in (swing or {}).items() if d["param"].startswith(prefix)), None)
-        if factor is not None and not d["param"].startswith(UNSCALED):
+        prefix, factor = next(((p, f) for p, f in (swing or {}).items() if d["param"].startswith(p)), (None, None))
+        # A lead into a gesture swings only when a hint names it (`Lift.right`), never through a wider prefix.
+        if factor is not None and (not d["param"].startswith(UNSCALED) or prefix.startswith(UNSCALED)):
             d["keys"] = [[k, v * factor] for k, v in d["keys"]]
     return params, drivers, physics
 

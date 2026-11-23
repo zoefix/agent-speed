@@ -39,6 +39,6 @@
  "rig": {
   "legsInSkirt": true,
   "swing": {"Skirt": 0.05, "AngleX": 0.6, "AngleY": 0.5},
-  "poseSwing": {"idle": {"HairBack": 0.4}, "redline": {"Arm.right": 0.4, "Forearm.right": 0.4}}
+  "poseSwing": {"idle": {"HairBack": 0.4, "Skirt": 0, "Lift.right": 0.3, "Bend.right": 0.3}, "redline": {"Arm.right": 0.4, "Forearm.right": 0.4}, "sleepy": {"Arm.right": 0.3}}
  }
 }

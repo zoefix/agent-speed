@@ -138,7 +138,8 @@ swings less far, so less of what the art never drew shows),
 `wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object
 that does not move with the hand, such as a desk; a gesture on its side swaps the arm alone and leaves the object the
 base's), `swing` (parameter id prefixes to factors on their drivers, such as `{"Arm.right": 0.35}`: a part whose
-hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay), `poseSwing` (the same per pose,
+hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay unless a key names them, such as
+`Lift.right`, for an old arm that carries a toy), `poseSwing` (the same per pose,
 over `swing`), `toy` (a held toy with a face of its own: its eyes and mouth go to the toy even where it is held up to
 her face, all of a stacked eye at once, instead of to her face's layers, which follow the head and fade under face
 patches) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs

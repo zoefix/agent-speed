@@ -1589,6 +1589,14 @@ class BodyHandTests(unittest.TestCase):
                  Layer("hand.right", "hand", hand, "right")]
         self.assertEqual(hands_on_body(parts), ["right"])
 
+    def test_a_swing_hint_scales_a_gesture_lead_only_when_it_names_it(self):
+        from characters.rig import params
+        names = ["arm.right", "forearm.right"]
+        for swing, factor in (({"Arm": 0.2}, 1.0), ({"Lift.right": 0.1}, 0.1)):
+            _, drivers, _ = params.build({"faceWidth": 100.0}, names, swing=swing)
+            keys = {d["param"]: d["keys"][-1][1] for d in drivers}
+            self.assertAlmostEqual(keys["Lift.right"], params.LIFT_RANGE * factor)
+
     def test_the_arm_of_a_hand_on_the_body_sways_less(self):
         from characters.rig import params
         names = ["shoulder.right", "arm.right", "forearm.right", "shoulder.left", "arm.left"]

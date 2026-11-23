@@ -40,9 +40,9 @@
  "rig": {
   "legsInSkirt": true,
   "poseSwing": {
-   "idle": {"Arm.right": 0.4, "Shoulder.right": 0.4},
+   "idle": {"Arm.right": 0.15, "Shoulder.right": 0.2, "Forearm.right": 0.2},
    "greet": {"Forearm.right": 0.4},
-   "sleepy": {"Skirt": 0.4, "Angle": 0.5},
+   "sleepy": {"Skirt": 0.15, "Angle": 0.5},
    "think": {"AngleZ": 0.5},
    "focus": {"AngleZ": 0.5, "HairBack1": 0.5},
    "wait": {"AngleX": 0.5, "AngleY": 0.5},
