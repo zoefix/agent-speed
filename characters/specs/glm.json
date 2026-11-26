@@ -41,7 +41,8 @@
   "tailSwing": 0.15,
   "ears": true,
   "legsInSkirt": true,
+  "approach": {"cruise": {"hip": 0}},
   "swing": {"HairBack": 0.25, "Skirt": 0.3},
-  "poseSwing": {"overdrive": {"AngleX": 0.25, "AngleY": 0.25, "Angle": 0.5, "EarTwitch.left": 0.1, "EarTwitch": 0.4, "Tail": 0.2, "HairLock1": 0.3}, "redline": {"HairBack": 0.15}, "sleepy": {"AngleZ": 0.4, "EyeOpen": 0}, "cruise": {"Tail": 0.3, "Skirt": 0.15, "Bend.left": 0.3, "HairBack": 0.25}, "idle": {"Bend.left": 0.3, "Lift.left": 0.3}}
+  "poseSwing": {"overdrive": {"AngleX": 0.25, "AngleY": 0.25, "Angle": 0.5, "EarTwitch.left": 0.1, "EarTwitch": 0.4, "Tail": 0.2, "HairLock1": 0.3}, "redline": {"HairBack": 0.15}, "sleepy": {"AngleZ": 0.4, "EyeOpen": 0}, "cruise": {"Tail": 0.3, "Skirt": 0.15, "Bend.left": 0.3, "HairBack": 0.25, "Forearm.left@wave": 0.3}, "idle": {"Bend.left": 0.3, "Lift.left": 0.3}}
  }
 }

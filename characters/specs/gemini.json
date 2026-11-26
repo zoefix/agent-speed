@@ -43,10 +43,10 @@
  },
  "rig": {
   "tail": true,
-  "approach": {"idle": {"peace": 0, "wave": 0, "shh": 0, "thumbsup": 0}},
+  "approach": {"idle": {"peace": 0, "wave": 0, "shh": 0, "thumbsup": 0, "chin": 0}},
   "ears": true,
   "rigidLower": true,
   "bodyInArms": true,
-  "poseSwing": {"focus": {"AngleZ": 0.05, "Angle": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "Wrist.right": 0.3, "AngleX": 0.4, "AngleY": 0.4}, "boost": {"Arm.right": 0.15, "Forearm.right": 0.3, "BodyAngleZ": 0.5, "HairBack": 0.5, "Hip": 0.25}}
+  "poseSwing": {"idle": {"Forearm.right@wave": 0.3}, "focus": {"AngleZ": 0.05, "Angle": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "Wrist.right": 0.3, "AngleX": 0.4, "AngleY": 0.4}, "boost": {"Arm.right": 0.15, "Forearm.right": 0.3, "BodyAngleZ": 0.5, "HairBack": 0.5, "Hip": 0.25}}
  }
 }

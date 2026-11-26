@@ -539,7 +539,8 @@ def main(argv=None):
     plist, drivers, physics = params.build(lm, list(bone_index), tail_swing=float(hints.get("tailSwing", 1.0)),
                                            swing={k: float(v) for k, v in swing.items()})
     vparams, vdrivers, part_drivers, vmeta = params.variant_controls(loaded, {e["name"] for e in entries},
-                                                                    approach=hints.get("approach", {}).get(pose_name))
+                                                                    approach=hints.get("approach", {}).get(pose_name),
+                                                                    swing=swing)
     path = package.write(args.out, args.name, size, sheet, bones, plist + vparams, drivers + vdrivers, physics,
                          entries, landmark_summary(lm), part_drivers, vmeta)
     print("\n".join(report))

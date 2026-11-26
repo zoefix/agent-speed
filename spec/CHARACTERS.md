@@ -139,7 +139,9 @@ swings less far, so less of what the art never drew shows),
 that does not move with the hand, such as a desk; a gesture on its side swaps the arm alone and leaves the object the
 base's), `swing` (parameter id prefixes to factors on their drivers, such as `{"Arm.right": 0.35}`: a part whose
 hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay unless a key names them, such as
-`Lift.right`, for an old arm that carries a toy), `poseSwing` (the same per pose,
+`Lift.right`, for an old arm that carries a toy; a key naming a gesture's own arm, such as `Forearm.right@wave`,
+scales that arm's turns, its flourish as well as its approach: a wave whose flap tears the hand art flaps less),
+`poseSwing` (the same per pose,
 over `swing`), `approach` (per band, gesture ids or `*` to factors on the turn a gesture's new arm settles in by: an
 arm whose art carries a copy of what lies near it, such as the cape, a hair ornament or a skirt panel, would swing
 that copy away from the real one; with 0 it fades in where it rests, the old arm still leading toward it), `toy` (a held toy with a face of its own: its eyes and mouth go to the toy even where it is held up to

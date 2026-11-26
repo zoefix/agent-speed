@@ -123,6 +123,26 @@ class VariantTests(unittest.TestCase):
         self.assertAlmostEqual(wave["approach"]["Arm.right@wave"], full / 2, delta=0.001)
         self.assertEqual(fist["lead"], wave["lead"])
 
+    def test_a_swing_key_naming_a_gestures_arm_scales_its_turns_and_nothing_else(self):
+        from characters.rig.layers import Layer
+        from characters.rig.params import variant_controls
+        from characters.rig.variants import Variant
+
+        def arm(vid):
+            return Variant(vid, "arm", "right", [Layer(f"handwear.right@{vid}", "handwear", None, "right")],
+                           ["handwear.right"], approach_deg=-30.0, approach_fore_deg=12.0)
+
+        def turns(swing):
+            _, drivers, _, meta = variant_controls([arm("fist"), arm("wave")], set(), swing=swing)
+            return {d["param"]: d["keys"][-1][1] for d in drivers}, meta
+
+        full, meta = turns(None)
+        damped, damped_meta = turns({"Forearm.right@wave": 0.3, "Forearm.right": 0.5, "Arm.right": 0.5})
+        self.assertAlmostEqual(damped["Forearm.right@wave"], 0.3 * full["Forearm.right@wave"])
+        for pid in ("Arm.right@wave", "Arm.right@fist", "Forearm.right@fist"):
+            self.assertEqual(damped[pid], full[pid])
+        self.assertEqual(damped_meta, meta)
+
     def test_old_and_new_arm_meet_halfway_with_the_old_turning_at_most_30_degrees(self):
         from characters.rig.variants import _meet
         for gap in (10.0, -40.0, 100.0):

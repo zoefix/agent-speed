@@ -277,11 +277,12 @@ def _unit(x):
     return round(max(-1.0, min(1.0, float(x))), 3)
 
 
-def variant_controls(variants, part_names, approach=None):
+def variant_controls(variants, part_names, approach=None, swing=None):
     """Parameters, bone drivers and part opacity drivers for pose and expression variants. `approach` maps gesture
     ids (or `*`) to factors on the turn the new arm settles in by (the `approach` hint): an arm whose art carries a
     copy of what lies near it (the cape, a hair ornament, a skirt panel) swings that copy away from the real one, and
-    with 0 it fades in where it rests."""
+    with 0 it fades in where it rests. A `swing` key naming a gesture's own arm (`Forearm.right@wave`) scales that
+    arm's turns, its flourish (a wave's flap) as well as its approach."""
     params, drivers, part_drivers, meta = [], [], [], []
     for v in variants:
         p = f"Var.{v.id}"
@@ -315,8 +316,10 @@ def variant_controls(variants, part_names, approach=None):
             arm_p, fore_p = f"Arm.{s}@{v.id}", f"Forearm.{s}@{v.id}"
             settle = float((approach or {}).get(v.id, (approach or {}).get("*", 1.0)))
             params += [param(arm_p), param(fore_p)]
-            drivers += [linear(arm_p, f"arm.{s}@{v.id}", "rotate", VARIANT_ARM_RANGE),
-                        linear(fore_p, f"forearm.{s}@{v.id}", "rotate", VARIANT_FOREARM_RANGE)]
+            own = {pid: float(next((f for k, f in (swing or {}).items() if "@" in k and pid.startswith(k)), 1.0))
+                   for pid in (arm_p, fore_p)}
+            drivers += [linear(arm_p, f"arm.{s}@{v.id}", "rotate", VARIANT_ARM_RANGE * own[arm_p]),
+                        linear(fore_p, f"forearm.{s}@{v.id}", "rotate", VARIANT_FOREARM_RANGE * own[fore_p])]
             entry.update({
                 "side": s, "front": bool(v.front), "arm": arm_p, "forearm": fore_p,
                 "lead": {f"Lift.{s}": _unit(v.lead_deg / LIFT_RANGE),

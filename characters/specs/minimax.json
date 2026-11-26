@@ -45,7 +45,7 @@
    "sleepy": {"Angle": 0.4},
    "boost": {"AngleZ": 0.1, "Angle": 0.5},
    "greet": {"Hip": 0.15, "BodyAngleZ": 0.3, "BodySway": 0.3},
-   "cruise": {"Wrist.right": 0.4},
+   "cruise": {"Wrist.right": 0.4, "Forearm.right@wave": 0.3},
    "focus": {"Arm.right": 0.3, "Forearm.right": 0.3}
   }
  }
