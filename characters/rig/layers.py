@@ -777,17 +777,29 @@ def wings_alone(layers, reach=6, island=0.05, enclosed=0.6):
     (the back hair holds a dark copy of both wings), which shows once they flap. A layer's pixels under the wings
     more than `reach` px from where that layer shows beside them go. A bit of that layer then cut off from the rest
     (seen through a gap between the wing's spars) would float as a dash once the wings flap: it goes into the wing
-    framing it (_islands_to, the rest pose stays the same). Returns the pixels cleared."""
+    framing it (_islands_to, the rest pose stays the same). The wing's extent takes in its soft rim (alpha over 0.02,
+    grown 1 px): the copy of its outline under that rim is no layer showing beside it, else the copy within `reach` of
+    it stayed and the hair's swing drew it out as dashes along the wing's edge; what of it shows through the rim goes
+    into the wing, so the rest pose stays the same. Returns the pixels cleared."""
     cleared = 0
     wings = [layer for layer in layers if layer.tag == "wings"]
     for wing in wings:
-        over = wing.alpha > 0.5
+        extent = ndimage.binary_dilation(wing.alpha > 0.02, iterations=1)
         for layer in layers[:layers.index(wing)]:
             solid = layer.alpha > 0.5
-            hidden = solid & over
+            hidden = (layer.alpha > 0.02) & extent
             if not hidden.any():
                 continue
-            far = hidden & (ndimage.distance_transform_edt(~(solid & ~over)) > reach)
+            far = hidden & (ndimage.distance_transform_edt(~(solid & ~extent)) > reach)
+            between = layers[layers.index(layer) + 1:layers.index(wing)]
+            seen = far & (wing.alpha <= 0.5)
+            if between:
+                seen &= coverage(between) < 0.05
+            if seen.any():
+                a, t = layer.alpha[seen][:, None], wing.alpha[seen][:, None]
+                total = t + a * (1 - t)
+                color = (wing.rgba[seen][:, :3] * t + layer.rgba[seen][:, :3] * a * (1 - t)) / np.maximum(total, 1e-6)
+                wing.rgba[seen] = np.concatenate([color, total], axis=1)
             layer.rgba[..., 3] = np.where(far, 0.0, layer.alpha)
             cleared += int(far.sum())
             if far.any():
@@ -860,6 +872,52 @@ def _islands_to(hair, layers, frames, island, enclosed):
         color = (target.rgba[piece][:, :3] * t + hair.rgba[piece][:, :3] * a * (1 - t)) / np.maximum(total, 1e-6)
         target.rgba[piece] = np.concatenate([color, total], axis=1)
         hair.rgba[..., 3][piece] = 0.0
+
+
+def hair_specks_off(layers, speck=80, join=3, reach=20, cover=0.8):
+    """Gives the layer they belong to the specks the split left in the front hair: a few white flecks of a tail's fur
+    rim stay with the hair, and a lock's swing throws them off the tail. Pieces of the front hair (8-connected, alpha
+    over 0.3) within 2 * `join` px of each other form a cluster; one under `speck` px in all (a broken strand is
+    longer), more than `reach` px from the rest of the hair (a strand's tip is nearer), that one layer holds by `cover`
+    goes to it, grown 2 px over its soft edge: into the layer under it (not hair or the face's layers), composited over
+    it, when the layers between are clear there; or away when a layer above hides it. Either way the rest pose stays
+    the same. Returns the pixels moved."""
+    moved = 0
+    skip = FACE_TAGS + ("front hair", "back hair")
+    for hair in [layer for layer in layers if layer.tag == "front hair"]:
+        at = layers.index(hair)
+        below = [layer for layer in layers[:at] if layer.tag not in skip]
+        above = layers[at + 1:]
+        mass = hair.alpha > 0.3
+        clusters, count = ndimage.label(ndimage.binary_dilation(mass, iterations=join), structure=np.ones((3, 3)))
+        if count < 2:
+            continue
+        clusters = np.where(mass, clusters, 0)
+        sizes = np.asarray(ndimage.sum(mass, clusters, range(1, count + 1)))
+        rest = np.isin(clusters, 1 + np.flatnonzero(sizes >= speck))
+        far = ndimage.distance_transform_edt(~rest) > reach
+        for k in 1 + np.flatnonzero((sizes > 0) & (sizes < speck)):
+            core = clusters == k
+            if not far[core].all():
+                continue
+            piece = ndimage.binary_dilation(core, iterations=2) & (hair.alpha > 0) & ~(mass & ~core)
+            if any((layer.alpha[core] > 0.5).mean() >= cover for layer in above):
+                hair.rgba[..., 3][piece] = 0.0
+                moved += int(piece.sum())
+                continue
+            target = next((layer for layer in reversed(below) if (layer.alpha[core] > 0.5).mean() >= cover), None)
+            if target is None:
+                continue
+            between = layers[layers.index(target) + 1:at]
+            if between and float(coverage(between)[piece].max()) > 0.05:
+                continue
+            a, t = hair.alpha[piece][:, None], target.alpha[piece][:, None]
+            total = a + t * (1 - a)
+            color = (hair.rgba[piece][:, :3] * a + target.rgba[piece][:, :3] * t * (1 - a)) / np.maximum(total, 1e-6)
+            target.rgba[piece] = np.concatenate([color, total], axis=1)
+            hair.rgba[..., 3][piece] = 0.0
+            moved += int(piece.sum())
+    return moved
 
 
 def tail_alone(layers, reference, share=0.5, min_px=2000):

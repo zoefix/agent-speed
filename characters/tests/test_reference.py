@@ -575,6 +575,24 @@ class AppendageTests(unittest.TestCase):
         ref[120:135, 120:175] = (0.9, 0.3, 0.6)
         self.assertEqual(recover_missing(parts, ref, {"tail": True}, figure=figure), ["tail"])
 
+    def test_light_art_recovered_beside_a_soft_edged_layer_leaves_no_seam(self):
+        from characters.rig.appendages import recover_missing
+        from characters.rig.layers import Layer, coverage
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[20:110, 60:140] = (0.95, 0.9, 0.85)
+        ref[90:190, 30:170] = (0.9, 0.85, 0.8)
+        hair = np.zeros((200, 200, 4), np.float32)
+        hair[90:190, 30:170] = (0.9, 0.85, 0.8, 1.0)
+        hair[90, 30:170, 3] = 0.4
+        hair[91, 30:170, 3] = 0.7
+        face = np.zeros((200, 200, 4), np.float32)
+        face[120:180, 70:130] = (0.95, 0.85, 0.8, 1.0)
+        parts = [Layer("front hair", "front hair", hair), Layer("face", "face", face)]
+        self.assertEqual(len(recover_missing(parts, ref, {})), 1)
+        self.assertGreater(float(coverage(parts)[90, 100]), 0.99)
+        self.assertGreater(float(coverage(parts)[88, 100]), 0.99)
+        self.assertLess(float(coverage(parts)[20, 60]), 0.99)
+
     def test_the_rest_check_leaves_out_the_floor_shadow_and_still_counts_a_part_left_out(self):
         from characters.rig.appendages import floor_shadow
         from characters.rig.checks import rest_metrics, rest_problems
@@ -1256,6 +1274,21 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[90, 75], 1.0)
         self.assertEqual(hair.alpha[90, 30], 0.0)
 
+    def test_the_wing_outline_copied_under_its_soft_rim_goes_with_the_copy_inside(self):
+        from characters.rig.layers import composite, wings_alone
+        hair = self.layer("back hair", (0.3, 0.3, 0.3), (40, 160, 130, 170), (58, 122, 18, 82))
+        wings = self.layer("wings", (0.8, 0.8, 0.9), (60, 120, 20, 80))
+        wings.rgba[58:60, 18:82, 3] = 0.3
+        wings.rgba[120:122, 18:82, 3] = 0.3
+        wings.rgba[58:122, 18:20, 3] = 0.3
+        wings.rgba[58:122, 80:82, 3] = 0.3
+        before = composite([hair, wings])
+        wings_alone([hair, wings])
+        self.assertEqual(hair.alpha[59, 50], 0.0)
+        self.assertEqual(hair.alpha[64, 50], 0.0)
+        self.assertEqual(hair.alpha[100, 150], 1.0)
+        np.testing.assert_allclose(composite([hair, wings]), before, atol=1e-5)
+
     def test_an_earring_over_the_locks_is_drawn_above_them(self):
         from characters.rig.layers import earrings_over_hair
         ref = np.ones((200, 200, 3), np.float32)
@@ -1289,6 +1322,26 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(eyes.alpha[155, 85], 0.0)
         self.assertEqual(eyes.alpha[45, 75], 1.0)
         np.testing.assert_allclose(toy.rgba[155, 85, :3], 0.1)
+        np.testing.assert_allclose(composite(parts), before, atol=1e-5)
+
+    def test_white_specks_of_the_tail_rim_in_the_front_hair_go_to_the_tail_but_strands_stay(self):
+        from characters.rig.layers import composite, hair_specks_off
+        tail = self.layer("tail", (0.95, 0.95, 0.95), (100, 180, 100, 160))
+        tail.rgba[120:124, 122:124, :3] = 0.1
+        strand = [(150, 152, x, x + 10) for x in range(102, 160, 12)]
+        hair = self.layer("front hair", (0.1, 0.1, 0.15), (10, 90, 40, 110), (100, 103, 104, 108),
+                          (120, 124, 120, 124), *strand)
+        hair.rgba[120:124, 120:124, :3] = 0.95
+        hidden = self.layer("headwear", (0.4, 0.2, 0.2), (60, 70, 150, 170))
+        hair.rgba[63:66, 158:161] = (0.4, 0.2, 0.2, 1.0)
+        parts = [tail, hair, hidden]
+        before = composite(parts)
+        self.assertGreater(hair_specks_off(parts), 0)
+        self.assertEqual(hair.alpha[122, 122], 0.0)
+        self.assertEqual(hair.alpha[64, 159], 0.0)
+        self.assertEqual(hair.alpha[151, 105], 1.0)
+        self.assertEqual(hair.alpha[101, 106], 1.0)
+        self.assertEqual(hair.alpha[50, 70], 1.0)
         np.testing.assert_allclose(composite(parts), before, atol=1e-5)
 
     def test_with_the_toy_hint_eyes_of_a_toy_held_up_to_the_cheek_go_to_the_toy_but_hers_stay(self):
@@ -1655,6 +1708,23 @@ class BodyHandTests(unittest.TestCase):
         self.assertEqual(parts[1].alpha[50, 63], 0.0)
         self.assertEqual(parts[1].alpha[50, 67], 1.0)
         self.assertTrue(np.allclose(composite(parts), before, atol=1e-5))
+
+
+    def test_a_fists_creases_the_front_hair_drew_go_to_the_hand_though_redder_than_its_skin(self):
+        from characters.rig.hands import bits_in_hair
+        from characters.rig.layers import Layer
+        hand = np.zeros((100, 100, 4), np.float32)
+        hand[40:60, 40:60] = (0.98, 0.9, 0.85, 1.0)
+        hair = np.zeros((100, 100, 4), np.float32)
+        hair[30:70, 62:70] = (0.3, 0.3, 0.8, 1.0)
+        hair[44:58, 62:65] = (0.97, 0.88, 0.84, 1.0)
+        hair[50:52, 62:65] = (0.78, 0.45, 0.46, 1.0)
+        hair[35:38, 62:65] = (0.8, 0.5, 0.9, 1.0)
+        parts = [Layer("hand.right", "hand", hand, "right"), Layer("front hair", "front hair", hair)]
+        # The two knuckle bits (18 px each) with the crease between them would be one piece over the 40 px limit.
+        self.assertEqual(bits_in_hair(parts, parts[0], hand[..., 3] > 0.5), 42)
+        self.assertEqual(parts[1].alpha[51, 63], 0.0)
+        self.assertEqual(parts[1].alpha[36, 63], 1.0)
 
 
 class BackHairOnBodyTests(unittest.TestCase):

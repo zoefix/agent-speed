@@ -248,14 +248,24 @@ INK = 0.45
 OVER_HAND = ("front hair", "earwear", "headwear", "ears")
 
 
+def _small(mask, limit):
+    """The 8-connected pieces of `mask` under `limit` px."""
+    labels, count = ndimage.label(mask, structure=np.ones((3, 3)))
+    if not count:
+        return np.zeros(mask.shape, bool)
+    sizes = np.asarray(ndimage.sum(mask, labels, range(1, count + 1)))
+    return np.isin(labels, 1 + np.flatnonzero(sizes < limit))
+
+
 def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2, tone=None, over=OVER_HAND):
     """Bits of the hand that the front hair took (knuckles seen between strands crossing the hand, or fingertips on a
     headphone's cup: any OVER_HAND layer): front hair pixels
     within `reach` px of the hand's mask whose hue is nearer the hand's than the hair's around them (and within `far`
-    of the hand's, as off_hue), and their dark outline next to them (under INK luminance, nearer the hand's ink than
-    the hair's), in pieces under `piece` of the mask's area, go to the hand part, composited as they showed. Layers
-    between the two give those pixels up where the hair hid them at rest. A gesture replacing the hand then takes them
-    along instead of leaving them in the hair, and a sway carries them. Returns the pixels moved. For an arm whose
+    of the hand's, as off_hue) and their dark outline next to them (under INK luminance, nearer the hand's ink than
+    the hair's), in pieces under `piece` of the mask's area, then a fist's redder creases touching those pieces or the
+    hand (within twice `far` of its hue and less than half as far as the hair's), go to the hand part, composited as
+    they showed. Layers between the two give those pixels up where the hair hid them at rest. A gesture replacing the
+    hand then takes them along instead of leaving them in the hair, and a sway carries them. Returns the pixels moved. For an arm whose
     hand has no part of its own (the pose model missed it), `hand` is the arm layer and `tone` the skin's hue."""
     i_hand = next((i for i, p in enumerate(parts) if p is hand), None)
     if i_hand is None or not mask.any():
@@ -284,7 +294,8 @@ def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2, tone=None, over
         between = parts[i_hand + 1:i]
         hidden = hair.alpha > 0.99
         clear = np.all([(p.alpha < 0.01) | hidden for p in between], axis=0) if between else np.ones(mask.shape, bool)
-        alike = near & (hair.alpha > 0.3) & clear & (to_hand <= far) & (to_hand < np.linalg.norm(chroma - own, axis=-1))
+        to_own = np.linalg.norm(chroma - own, axis=-1)
+        alike = near & (hair.alpha > 0.3) & clear & (to_hand <= far) & (to_hand < to_own)
         dark = (hair.rgba[..., :3] @ np.array([0.299, 0.587, 0.114], np.float32)) < INK
         own_ink = (hair.alpha > 0.9) & ring & dark
         if ink is not None and own_ink.sum() >= 20:
@@ -293,11 +304,14 @@ def bits_in_hair(parts, hand, mask, reach=8, piece=0.1, far=0.2, tone=None, over
             outline = near & (hair.alpha > 0.3) & clear & dark
             outline &= to_ink < np.linalg.norm(chroma - np.median(chroma[own_ink], axis=0), axis=-1)
             alike |= outline & ndimage.binary_dilation(alike | mask, iterations=3)
-        labels, count = ndimage.label(alike, structure=np.ones((3, 3)))
-        if not count:
-            continue
-        sizes = np.asarray(ndimage.sum(alike, labels, range(1, count + 1)))
-        take = np.isin(labels, 1 + np.flatnonzero(sizes < piece * mask.sum()))
+        take = _small(alike, piece * mask.sum())
+        # A fist's creases are redder than its skin: past `far`, up to twice it, when the hair's hue is twice as far,
+        # in pieces touching what goes or the hand itself (they joined the skin bits into one piece too big before).
+        creases = near & (hair.alpha > 0.3) & clear & ~take & (to_hand <= 2 * far) & (2 * to_hand < to_own)
+        labels, count = ndimage.label(creases, structure=np.ones((3, 3)))
+        if count:
+            touching = np.unique(labels[ndimage.binary_dilation(take | mask, iterations=2) & creases])
+            take |= _small(np.isin(labels, touching[touching > 0]), piece * mask.sum())
         if not take.any():
             continue
         a, t = hair.alpha[take][:, None], hand.alpha[take][:, None]

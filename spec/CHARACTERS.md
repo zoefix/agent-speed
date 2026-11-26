@@ -193,7 +193,10 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   in one pose of a series where the others have it (the boots of Claude's `think`). The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away
   from covered pixels, opened by 2 px, blobs of at least 0.05 % of the canvas) becomes a layer of its own, opaque
-  inside and as opaque as the art is dark on its rim (darkness / 0.3). The largest blob below the chin is the tail
+  inside and as opaque as the art is dark on its rim (darkness / 0.3), except within 3 px of a layer (away from the
+  paper), where the art runs on under that layer: opaque there, and also 2 px under that layer's soft edge (coverage
+  under 0.99), else the two soft edges left a dotted seam of the stage (ear tops the split left out, on the scalp).
+  The largest blob below the chin is the tail
   with the `tail` hint and no tail layer; with `wings`, the largest blob below the eyes and away from the head is the
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
   the face and `ears` beside it; when the split made no footwear, a blob reaching the bottom of the figure (within
@@ -285,7 +288,15 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   copy of both wings), which showed once they flapped. A layer's pixels under the wings more than 6 px from where
   that layer shows beside them go; a bit of it then cut off from the rest (under 5 % of its largest piece), seen
   between the wing's spars (which frame 60 % of its rim), goes into that wing (the rest pose stays the same), so it
-  flaps with it instead of floating as a dash.
+  flaps with it instead of floating as a dash. "Under the wings" takes in their soft rim (opacity over 0.02, grown
+  1 px): the copy of the wing's outline under that rim is no layer showing beside it, else the copy within 6 px of
+  it stayed and a swing of the hair drew it out as dashes along the wing's edge; what of it shows through the rim
+  goes into the wing.
+- **Specks in the front hair**: the split leaves a few specks of other parts in the front hair (white flecks of a
+  tail's fur rim), which a lock's swing threw off. Pieces of the front hair (opacity over 0.3) within 6 px of each
+  other form a cluster; one under 80 px in all, more than 20 px from the rest of the hair (a broken strand is longer,
+  a strand's tip nearer), that one layer holds by 80 % goes to it: composited into the layer under it (not hair or
+  the face's), or cleared where a layer above hides it. The rest pose stays the same.
 - **Arms over the face**: the split draws the face over the arms, so a finger on the lips was painted onto the face
   and stayed there when the arm moved. A piece of 30 px or more where an arm and the face's layers overlap is the
   arm's when the face's own paint there is off the art (median mean channel difference over 0.06, 5 px box) and the

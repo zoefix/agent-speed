@@ -92,9 +92,12 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in. Returns the names
     added (`<name>+` for a blob that joined a layer)."""
     h, w = reference.shape[:2]
-    labels, sizes, _, _ = _missing(parts, reference, bare)
+    labels, sizes, covered, art = _missing(parts, reference, bare)
     if not len(sizes):
         return []
+    total = coverage(parts)
+    beside = ndimage.binary_dilation(covered, iterations=3)
+    away = ~ndimage.binary_dilation(~art, iterations=2)
     keep = [i + 1 for i, s in enumerate(sizes) if s >= min_share * h * w]
     keep = _drawn(keep, labels, reference, figure, min_figure, max_chroma)
     tags = {p.tag for p in parts}
@@ -139,10 +142,15 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
             tag = "extra"
         rgba = np.zeros((h, w, 4), np.float32)
         rgba[..., :3] = reference
-        # Inside, the blob is opaque; on its rim the art was drawn over white, so its darkness is its coverage.
+        # Inside, the blob is opaque; on its rim the art was drawn over white, so its darkness is its coverage. Where
+        # it meets a layer the art runs on under that layer's soft edge (away from the paper): opaque there too, else
+        # the two soft edges left a dotted seam of the stage (the tops of ears the split left out, on the scalp).
         inner = ndimage.binary_erosion(blob, iterations=3)
         rim = np.clip((1 - reference.min(axis=2)) / 0.3, 0, 1)
-        rgba[..., 3] = np.where(inner, 1.0, np.where(blob, rim, 0.0))
+        under = ndimage.binary_dilation(blob, iterations=2) & (total > 0.02) & (total < 0.99) & ~blob
+        solid = inner | ((blob & beside) | under) & away
+        blob = blob | (under & away)
+        rgba[..., 3] = np.where(solid, 1.0, np.where(blob, rim, 0.0))
         tail = next((p for p in parts if p.tag == "tail"), None)
         if (tag == "extra" and tail is not None and sizes[i - 1] <= (tail.alpha > 0.5).sum()
                 and _touch(blob, [tail.alpha > 0.5]) >= 0.15):

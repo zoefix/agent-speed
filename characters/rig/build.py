@@ -318,6 +318,9 @@ def main(argv=None):
         print(f"copies of the wings cleared from the layers under them: {wing_copies} px")
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
+    specks = layers.hair_specks_off(parts)
+    if specks:
+        print(f"specks of other parts given back from the front hair: {specks} px")
     arms_taken = layers.objects_over_arms(parts, reference)
     parts, over_face = layers.arms_over_face(parts, reference)
     parts, ears_moved = layers.earrings_over_hair(parts, reference)

@@ -39,7 +39,7 @@
  },
  "rig": {
   "toy": true,
-  "swing": {"Hip": 0.3, "Foot": 0.15, "Skirt": 0.2},
+  "swing": {"Hip": 0.3, "Foot": 0.05, "Skirt": 0.1},
   "poseSwing": {
    "wait": {"Angle": 0.3, "Arm": 0.2, "Forearm": 0.2, "Shoulder": 0.3, "Body": 0.3},
    "cheer": {"Body": 0.4, "Arm.left": 0.2, "Shoulder.left": 0.2},
