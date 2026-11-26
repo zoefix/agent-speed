@@ -1046,6 +1046,12 @@ EYE_TAGS = ("eyewhite", "irides", "eyelash")
 TIP = ".tip"
 
 
+# Px a lifted lash tip takes past its dark stroke (its soft rim, which left a faint outline on the hair), and px
+# around it whose hair colors the fill leaves out.
+TIP_GROW = 2
+RIM_CLEAR = 3
+
+
 def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, faint=0.05, ring_alpha=0.5, beyond=12,
                     lash_share=0.75):
     """Takes out of the front hair what it drew of the eyes: See-Through puts a lash seen through the bangs (or drawn
@@ -1057,8 +1063,8 @@ def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, f
     that the lash is not most of it) by `apart` is a lash when its dark stroke (8-connected, followed up to `beyond`
     px past the eyes) lies over the eyes by `lash_share` at least: the outline of a strand runs on past them and stays;
     or a blob of it 3 px thick where the lash layer under it draws dark ink too.
-    Those pixels, grown by 1 px, take a blur of the hair's other colors (its dark strokes left out, so no grey smear;
-    LaMa drew the strand's body color down into pale tips). What the art showed there goes to a tip layer of the
+    Those pixels, grown by `TIP_GROW` px, take a blur of the hair's other colors (its dark strokes and the `RIM_CLEAR` px
+    around them left out, so no grey smear; LaMa drew the strand's body color down into pale tips). What the art showed there goes to a tip layer of the
     nearest lash, right above the hair: opaque on the lash pixels, at least `ring_alpha` on the 1 px around them,
     colored so the rest pose stays the same (only where the layers up to the hair cover the pixel fully). The tip is
     an eyelash layer, so it follows the eye and fades out with the lashes under a face patch, leaving the bangs.
@@ -1129,10 +1135,13 @@ def lashes_off_hair(layers, reach=4, dark=0.4, apart=0.2, local=21, island=80, f
         upto = layers[:layers.index(h) + 1]
         shown, cover = _over(upto, box)
         # Only where the layers up to the hair cover the pixel fully can a tip over it keep the rest pose.
-        take = ndimage.binary_dilation(core, iterations=1) & solid[box] & (cover > 0.999)
+        take = ndimage.binary_dilation(core, iterations=TIP_GROW) & solid[box] & (cover > 0.999)
         core &= take
         view = h.rgba[box]
-        colors = _smooth_fill(view[..., :3].copy(), solid[box] & ~take & ~strokes)
+        # The fill takes the hair's colors clear of the lash's soft rim, which is darker than the hair but not dark
+        # enough to be a stroke: from right beside it the fill came out as a grey-brown ghost of the tip.
+        clean = solid[box] & ~ndimage.binary_dilation(take | strokes, iterations=RIM_CLEAR)
+        colors = _smooth_fill(view[..., :3].copy(), clean if clean.any() else solid[box] & ~take & ~strokes)
         view[..., :3] = np.where(take[..., None], colors, view[..., :3])
         repainted += int(take.sum())
         below, _ = _over(upto, box)

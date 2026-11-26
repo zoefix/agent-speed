@@ -1220,6 +1220,22 @@ class TailCopyTests(unittest.TestCase):
         self.assertTrue(np.allclose(composite(parts), before, atol=1e-5))
         self.assertTrue(np.allclose(composite(parts[:3])[107, 97], (0.6, 0.6, 0.9), atol=0.02))
 
+    def test_a_lifted_lash_tip_leaves_clean_hair_without_the_grey_of_its_soft_rim(self):
+        from characters.rig.layers import composite, lashes_off_hair
+        skin = self.layer("face", (0.95, 0.85, 0.8), (40, 160, 40, 160))
+        lash = self.layer("eyelash", (0.1, 0.1, 0.1), (100, 112, 80, 120))
+        hair = self.layer("front hair", (0.6, 0.6, 0.9), (60, 110, 60, 140))
+        hair.rgba[102:112, 90:102, :3] = 0.5
+        hair.rgba[103:111, 91:101, :3] = 0.45
+        hair.rgba[104:110, 92:100, :3] = 0.15
+        parts = [skin, lash, hair]
+        before = composite(parts)
+        lashes_off_hair(parts)
+        self.assertTrue(np.allclose(composite(parts), before, atol=1e-5))
+        under = composite(parts[:3])
+        for y, x in ((107, 96), (103, 95), (102, 95), (107, 90)):
+            self.assertTrue(np.allclose(under[y, x], (0.6, 0.6, 0.9), atol=0.03), (y, x, under[y, x]))
+
     def test_back_hair_far_behind_the_body_goes_but_not_near_where_it_shows_or_behind_an_arm(self):
         from characters.rig.layers import back_hair_alone
         hair = self.layer("back hair", (0.6, 0.3, 0.1), (20, 190, 20, 180))
