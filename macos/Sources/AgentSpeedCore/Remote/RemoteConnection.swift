@@ -213,6 +213,10 @@ public final class RemoteConnection: @unchecked Sendable {
             return
         }
         report(.connecting)
+        if let command = RemoteWindowsRelay.command(destination: host.destination, environment: environment.processEnvironment) {
+            launch(.run, command)
+            return
+        }
         guard let command = RemoteCommand.probe(folder: host.effectiveRelayFolder) else {
             fail(.invalidDestination)
             return
