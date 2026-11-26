@@ -123,6 +123,32 @@ Steady state below 1 % of one core on an idle host; memory bounded by the same r
 the encoded backlog of one history batch; at most one history analysis at a time, on a second thread at low priority
 (`nice` 10), with at most 2 workers.
 
+### Experimental Windows live relay
+
+`windows/tools/AgentSpeed.Relay` builds a native Windows x64 relay on the Windows Core log readers.
+It speaks protocol 1 for seeded and live metrics, agent states, source status and clock pings.
+Older-day history, quota queries, the Claude status line bridge and the reporting tool stream are outside
+this experiment. A history request returns the nonfatal `historyFailed` so it cannot clear earlier data.
+
+Build from the repository root with .NET 10:
+
+```sh
+dotnet publish windows/tools/AgentSpeed.Relay -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/windows-relay
+```
+
+Stage `agent-speed-relay.exe` at `%LOCALAPPDATA%\AgentSpeed\relay\agent-speed-relay.exe` for the account
+used by Windows OpenSSH. On macOS, use the SHA-256 of the executable you built and the SSH alias with a debug build:
+
+```sh
+digest="$(shasum -a 256 dist/windows-relay/agent-speed-relay.exe | cut -d ' ' -f 1)"
+AGENT_SPEED_WINDOWS_RELAY_HOST=windows-box AGENT_SPEED_WINDOWS_RELAY_SHA256="$digest" \
+  swift run --package-path macos AgentSpeedProbe --watch 15 --remote windows-box
+```
+
+The SSH process verifies the manually staged executable
+before starting it. This opt-in is available to a debug build of the desktop app as well. Automatic platform
+detection, the settings connection test, relay deployment and release bundling continue to cover Linux hosts.
+
 ## 4. Connecting
 
 ### 4.1 The `ssh` command

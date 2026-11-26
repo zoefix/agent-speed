@@ -4,7 +4,7 @@ namespace AgentSpeed.Core.Remote;
 /// Splits the relay's stdout into lines (REMOTE 5.1): at most 1 MiB each. A longer line is dropped and counted, so the
 /// connection counts it as invalid. Not thread-safe.
 /// </summary>
-internal sealed class RemoteLineFramer
+internal sealed class RemoteLineFramer(int maxLineBytes = RemoteLineFramer.MaxLineBytes)
 {
     public const int MaxLineBytes = 1 << 20;
 
@@ -22,7 +22,7 @@ internal sealed class RemoteLineFramer
             var segment = newline < 0 ? chunk : chunk[..newline];
             if (!_skipping)
             {
-                if (_partial.Length + segment.Length > MaxLineBytes)
+                if (_partial.Length + segment.Length > maxLineBytes)
                 {
                     _skipping = true;
                     _partial.SetLength(0);

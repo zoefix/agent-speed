@@ -135,6 +135,10 @@ jobs:
         run: dotnet test windows/tests/AgentSpeed.TrafficHelper.Tests -c Release
       - name: Test status line helper
         run: dotnet test windows/tests/AgentSpeed.StatuslineHelper.Tests -c Release
+      - name: Test the native Windows relay
+        run: |
+          dotnet build windows/tools/AgentSpeed.Relay -c Release
+          python windows/tools/AgentSpeed.Relay/smoke_test.py dotnet windows/tools/AgentSpeed.Relay/bin/Release/net10.0/agent-speed-relay.dll
       - name: Publish
         shell: pwsh
         run: ./windows/scripts/publish.ps1
