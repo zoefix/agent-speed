@@ -40,7 +40,8 @@
   "tail": true,
   "legsInSkirt": true,
   "tailSwing": 0.15,
+  "approach": {"idle": {"peace": 0, "salute": 0, "idea": 0}},
   "swing": {"HairBack": 0.2},
-  "poseSwing": {"think": {"Angle": 0.15, "Body": 0.5}, "wait": {"Skirt": 0.3}, "cruise": {"Tail": 0.5, "HairBack": 0.2, "Arm.right": 0.4, "Forearm.right": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "AngleX": 0.5, "AngleY": 0.6, "AngleZ": 0.6}, "redline": {"AngleZ": 0.6}}
+  "poseSwing": {"think": {"Angle": 0.15, "Body": 0.5}, "wait": {"Skirt": 0.3}, "cruise": {"Tail": 0.35, "HairBack": 0.2, "Arm.right": 0.4, "Forearm.right": 0.4}, "overdrive": {"Arm.right": 0.4, "Forearm.right": 0.4, "AngleX": 0.5, "AngleY": 0.6, "AngleZ": 0.6}, "redline": {"AngleZ": 0.6}}
  }
 }

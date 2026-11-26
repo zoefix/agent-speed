@@ -39,6 +39,7 @@
  "rig": {
   "rigidLower": true,
   "bodyInArms": true,
-  "poseSwing": {"think": {"Arm.right": 0.3, "Forearm.right": 0.3, "Wing": 0.4}, "overdrive": {"Squash": 0.4, "Lean": 0.4, "AngleZ": 0.5}}
+  "approach": {"cruise": {"present": 0, "idea": 0}},
+  "poseSwing": {"think": {"Arm.right": 0.3, "Forearm.right": 0.3, "Wing": 0.4}, "overdrive": {"Squash": 0.4, "Lean": 0.4, "AngleZ": 0.5}, "cruise": {"Bend.left": 0.3, "Lift.left": 0.3}}
  }
 }

@@ -38,7 +38,8 @@
  },
  "rig": {
   "legsInSkirt": true,
+  "approach": {"idle": {"idea": 0}},
   "swing": {"Skirt": 0.05, "AngleX": 0.6, "AngleY": 0.5},
-  "poseSwing": {"idle": {"HairBack": 0.4, "Skirt": 0, "Lift.right": 0.3, "Bend.right": 0.15, "Forearm.right": 0.5}, "redline": {"Arm.right": 0.3, "Forearm.right": 0.4}, "sleepy": {"Arm.right": 0.3}}
+  "poseSwing": {"idle": {"HairBack": 0.4, "Skirt": 0, "Lift.right": 0.3, "Bend.right": 0.15, "Forearm.right": 0.5}, "redline": {"Arm.right": 0.1, "Forearm.right": 0.2}, "sleepy": {"Arm.right": 0.3}}
  }
 }

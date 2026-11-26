@@ -51,6 +51,18 @@ def paper(reference, matte, white=0.96, cut=0.5, pocket=0.8, covered=None, unsur
     return bare
 
 
+def paper_in_boxes(reference, boxes, white=0.96):
+    """Near-white pixels inside boxes given in canvas fractions (x0, y0, x1, y1): the `paper` hint, for a sliver of
+    paper between a shoe and an axe's spike so narrow that the matte calls it figure."""
+    h, w = reference.shape[:2]
+    out = np.zeros((h, w), bool)
+    near = reference.min(axis=2) > white
+    for x0, y0, x1, y1 in boxes:
+        ys, xs = slice(round(y0 * h), round(y1 * h)), slice(round(x0 * w), round(x1 * w))
+        out[ys, xs] = near[ys, xs]
+    return out
+
+
 HAIR_TAGS = ("back hair", "front hair")
 
 

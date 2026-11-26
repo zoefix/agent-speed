@@ -46,7 +46,8 @@
    "think": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3},
    "boost": {"Angle": 0.5},
    "redline": {"Angle": 0.5, "Arm.right": 0.3},
-   "sleepy": {"Angle": 0.5},
+   "sleepy": {"AngleZ": 0.2, "Angle": 0.5},
+   "cruise": {"AngleZ": 0.5},
    "idle": {"Lift.right": 0.1, "Bend.right": 0.1},
    "greet": {"EyeOpen": 0, "AngleZ": 0.4}
   },

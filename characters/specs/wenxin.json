@@ -38,8 +38,9 @@
  },
  "rig": {
   "staticObjects": true,
+  "approach": {"idle": {"fist": 0, "idea": 0, "salute": 0, "peace": 0}},
   "swing": {"HairBack": 0},
-  "poseSwing": {"think": {"AngleX": 0.6}, "sleepy": {"EyeOpen": 0}, "focus": {"EyeOpen": 0}, "idle": {"BodyAngleZ": 0.6}},
+  "poseSwing": {"think": {"AngleX": 0.3, "AngleY": 0.4}, "sleepy": {"EyeOpen": 0}, "focus": {"EyeOpen": 0}, "idle": {"BodyAngleZ": 0.6, "AngleX": 0.5, "Lift.right": 0.3, "Bend.right": 0.3}, "boost": {"AngleX": 0.5}, "cruise": {"AngleX": 0.5}},
   "props": {
    "overdrive": {"points": [[0.418, 0.3672], [0.4258, 0.4492], [0.5391, 0.3555], [0.582, 0.4375]], "follow": "chest"}
   }

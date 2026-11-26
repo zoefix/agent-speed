@@ -39,11 +39,12 @@
  },
  "rig": {
   "rigidLower": true,
+  "approach": {"idle": {"chin": 0, "peace": 0, "idea": 0, "hairtuck": 0}, "cruise": {"wave": 0}},
   "poseSwing": {
    "overdrive": {"Angle": 0.3},
    "sleepy": {"Angle": 0.4},
    "boost": {"AngleZ": 0.1, "Angle": 0.5},
-   "greet": {"Hip": 0.25, "BodyAngleZ": 0.5, "BodySway": 0.5},
+   "greet": {"Hip": 0.15, "BodyAngleZ": 0.3, "BodySway": 0.3},
    "cruise": {"Wrist.right": 0.4},
    "focus": {"Arm.right": 0.3, "Forearm.right": 0.3}
   }

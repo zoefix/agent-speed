@@ -257,7 +257,7 @@ def main(argv=None):
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--lama", help="LaMa inpainting model (big-lama.pt, TorchScript) that repaints what moving parts "
                                    "uncover")
-    ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
+    ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props, paper)")
     ap.add_argument("--idle", help="the character's idle pose (its built package): refuse this pose if it draws no "
                                    "feet while the idle pose does")
     ap.add_argument("--check", action="store_true", help="stop after the layers and print the checks as JSON "
@@ -277,8 +277,8 @@ def main(argv=None):
                 p.tag = "objects"
                 print(f"{p.name}: no tail hint, rigged as an object")
     reference = layers.load_reference(args.reference, size)
-    points, follow = prop_hint(hints, args.band or (args.name.split("-", 1)[1] if args.name and "-" in args.name
-                                                    else None))
+    pose_name = args.band or (args.name.split("-", 1)[1] if args.name and "-" in args.name else None)
+    points, follow = prop_hint(hints, pose_name)
     if points and args.sam:
         from . import segment
         prop = segment.prop_mask(reference, [(x * size[0], y * size[1]) for x, y in points], args.sam)
@@ -293,6 +293,11 @@ def main(argv=None):
         if pockets.any():
             print(f"paper between curls of hair: {int(pockets.sum())} px")
             bare |= pockets
+        boxes = hints.get("paper", {}).get(pose_name)
+        if boxes:
+            named = matte.paper_in_boxes(reference, boxes) & ~bare
+            print(f"paper in the hint's boxes: {int(named.sum())} px")
+            bare |= named
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
     face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
@@ -530,11 +535,11 @@ def main(argv=None):
         uv = vertices - np.array([x0, y0], np.float32) + np.array([ax, ay], np.float32)
         entries.append(package.part_entry(layer, order, vertices, uv, triangles, bone_idx, weights))
 
-    pose_name = args.band or (args.name.split("-", 1)[1] if args.name and "-" in args.name else None)
     swing = {**hints.get("swing", {}), **hints.get("poseSwing", {}).get(pose_name, {})}
     plist, drivers, physics = params.build(lm, list(bone_index), tail_swing=float(hints.get("tailSwing", 1.0)),
                                            swing={k: float(v) for k, v in swing.items()})
-    vparams, vdrivers, part_drivers, vmeta = params.variant_controls(loaded, {e["name"] for e in entries})
+    vparams, vdrivers, part_drivers, vmeta = params.variant_controls(loaded, {e["name"] for e in entries},
+                                                                    approach=hints.get("approach", {}).get(pose_name))
     path = package.write(args.out, args.name, size, sheet, bones, plist + vparams, drivers + vdrivers, physics,
                          entries, landmark_summary(lm), part_drivers, vmeta)
     print("\n".join(report))

@@ -140,9 +140,13 @@ that does not move with the hand, such as a desk; a gesture on its side swaps th
 base's), `swing` (parameter id prefixes to factors on their drivers, such as `{"Arm.right": 0.35}`: a part whose
 hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay unless a key names them, such as
 `Lift.right`, for an old arm that carries a toy), `poseSwing` (the same per pose,
-over `swing`), `toy` (a held toy with a face of its own: its eyes and mouth go to the toy even where it is held up to
+over `swing`), `approach` (per band, gesture ids or `*` to factors on the turn a gesture's new arm settles in by: an
+arm whose art carries a copy of what lies near it, such as the cape, a hair ornament or a skirt panel, would swing
+that copy away from the real one; with 0 it fades in where it rests, the old arm still leading toward it), `toy` (a held toy with a face of its own: its eyes and mouth go to the toy even where it is held up to
 her face, all of a stacked eye at once, instead of to her face's layers, which follow the head and fade under face
-patches) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs
+patches), `paper` (per band or mood pose, boxes `[x0, y0, x1, y1]` in canvas fractions whose near-white pixels are
+bare paper whatever the matte says: a sliver between a shoe and an axe's spike too narrow for the matte to call
+background) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs
 and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
 is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice;
 the hint also suits long-skirted art whose boots peek out under a hem that barely covers their tops, which would

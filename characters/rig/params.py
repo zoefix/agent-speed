@@ -277,8 +277,11 @@ def _unit(x):
     return round(max(-1.0, min(1.0, float(x))), 3)
 
 
-def variant_controls(variants, part_names):
-    """Parameters, bone drivers and part opacity drivers for pose and expression variants."""
+def variant_controls(variants, part_names, approach=None):
+    """Parameters, bone drivers and part opacity drivers for pose and expression variants. `approach` maps gesture
+    ids (or `*`) to factors on the turn the new arm settles in by (the `approach` hint): an arm whose art carries a
+    copy of what lies near it (the cape, a hair ornament, a skirt panel) swings that copy away from the real one, and
+    with 0 it fades in where it rests."""
     params, drivers, part_drivers, meta = [], [], [], []
     for v in variants:
         p = f"Var.{v.id}"
@@ -310,6 +313,7 @@ def variant_controls(variants, part_names):
         if v.kind == "arm":
             s = v.side
             arm_p, fore_p = f"Arm.{s}@{v.id}", f"Forearm.{s}@{v.id}"
+            settle = float((approach or {}).get(v.id, (approach or {}).get("*", 1.0)))
             params += [param(arm_p), param(fore_p)]
             drivers += [linear(arm_p, f"arm.{s}@{v.id}", "rotate", VARIANT_ARM_RANGE),
                         linear(fore_p, f"forearm.{s}@{v.id}", "rotate", VARIANT_FOREARM_RANGE)]
@@ -317,8 +321,8 @@ def variant_controls(variants, part_names):
                 "side": s, "front": bool(v.front), "arm": arm_p, "forearm": fore_p,
                 "lead": {f"Lift.{s}": _unit(v.lead_deg / LIFT_RANGE),
                          f"Bend.{s}": _unit(v.lead_fore_deg / BEND_RANGE)},
-                "approach": {arm_p: _unit(v.approach_deg / VARIANT_ARM_RANGE),
-                             fore_p: _unit(v.approach_fore_deg / VARIANT_FOREARM_RANGE)},
+                "approach": {arm_p: _unit(settle * v.approach_deg / VARIANT_ARM_RANGE),
+                             fore_p: _unit(settle * v.approach_fore_deg / VARIANT_FOREARM_RANGE)},
             })
         meta.append(entry)
     return params, drivers, part_drivers, meta

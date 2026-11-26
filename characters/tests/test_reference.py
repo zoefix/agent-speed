@@ -108,6 +108,21 @@ class VariantTests(unittest.TestCase):
             old = np.interp(t, keys["handwear.right"][:, 0], keys["handwear.right"][:, 1])
             self.assertGreaterEqual(1 - (1 - new) * (1 - old), 0.95)
 
+    def test_an_approach_hint_scales_the_turn_a_gesture_settles_in_by_but_not_its_lead(self):
+        from characters.rig.layers import Layer
+        from characters.rig.params import variant_controls
+        from characters.rig.variants import Variant
+
+        def arm(vid):
+            return Variant(vid, "arm", "right", [Layer(f"handwear.right@{vid}", "handwear", None, "right")],
+                           ["handwear.right"], lead_deg=20.0, approach_deg=-30.0, approach_fore_deg=12.0)
+        _, _, _, meta = variant_controls([arm("fist"), arm("wave")], set(), approach={"fist": 0, "*": 0.5})
+        fist, wave = meta
+        self.assertEqual(set(fist["approach"].values()), {0.0})
+        full = variant_controls([arm("wave")], set())[3][0]["approach"]["Arm.right@wave"]
+        self.assertAlmostEqual(wave["approach"]["Arm.right@wave"], full / 2, delta=0.001)
+        self.assertEqual(fist["lead"], wave["lead"])
+
     def test_old_and_new_arm_meet_halfway_with_the_old_turning_at_most_30_degrees(self):
         from characters.rig.variants import _meet
         for gap in (10.0, -40.0, 100.0):
@@ -967,6 +982,18 @@ class PaperTests(unittest.TestCase):
         self.assertTrue(paper(ref, loose, covered=np.ones((60, 60), bool))[30, 30])
         self.assertTrue(paper(ref, np.zeros((60, 60), np.float32))[0, 0])
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
+
+    def test_near_white_in_a_hinted_box_is_paper_but_not_the_art_around_it(self):
+        from characters.rig.matte import paper_in_boxes
+        ref = np.full((100, 200, 3), 0.3, np.float32)
+        ref[40:60, 50:53] = 1.0
+        ref[40:60, 150:153] = 1.0
+        ref[45, 55] = 0.9
+        named = paper_in_boxes(ref, [(0.2, 0.3, 0.3, 0.7)])
+        self.assertTrue(named[50, 51])
+        self.assertFalse(named[45, 55])
+        self.assertFalse(named[50, 151])
+        self.assertEqual(int(named.sum()), 60)
 
     def test_white_pockets_between_curls_below_the_chin_are_paper(self):
         from characters.rig.layers import Layer
