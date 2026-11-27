@@ -46,5 +46,5 @@
    "spin"
   ]
  },
- "rig": {"rigidLower": true, "bodyInArms": true, "approach": {"idle": {"chin": 0, "thumbsup": 0}, "cruise": {"thumbsup": 0, "idea": 0, "chin": 0}}, "poseSwing": {"idle": {"HairBack": 0.35, "Bend.right": 0.3, "Lift.right": 0}, "cheer": {"HairBack": 0.3}, "sleepy": {"AngleZ": 0.25, "AngleX": 0.4, "AngleY": 0.4}, "cruise": {"Lift.right": 0.3, "Bend.right": 0.3, "BodyAngleZ": 0.5}}}
+ "rig": {"rigidLower": true, "bodyInArms": true, "approach": {"idle": {"chin": 0, "thumbsup": 0}, "cruise": {"thumbsup": 0, "idea": 0, "chin": 0}}, "poseSwing": {"idle": {"HairBack": 0.35, "Bend.right": 0.3, "Lift.right": 0}, "cheer": {"HairBack": 0.3, "HairLock1": 0}, "sleepy": {"AngleZ": 0.25, "AngleX": 0.4, "AngleY": 0.4}, "cruise": {"Lift.right": 0.3, "Bend.right": 0.3, "BodyAngleZ": 0.5}}}
 }
