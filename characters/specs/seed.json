@@ -39,17 +39,18 @@
  },
  "rig": {
   "toy": true,
+  "approach": {"idle": {"hip": 0}},
   "swing": {"Hip": 0.3, "Foot": 0.05, "Skirt": 0.1},
   "poseSwing": {
    "wait": {"Angle": 0.3, "Arm": 0.2, "Forearm": 0.2, "Shoulder": 0.3, "Body": 0.3},
    "cheer": {"Body": 0.4, "Arm.left": 0.2, "Shoulder.left": 0.2},
-   "think": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3},
+   "think": {"Arm.left": 0.3, "Forearm.left": 0.1, "Shoulder.left": 0.3},
    "boost": {"Angle": 0.5},
    "redline": {"Angle": 0.5, "Arm.right": 0.3},
-   "sleepy": {"AngleZ": 0.1, "AngleY": 0.3, "Angle": 0.5},
+   "sleepy": {"AngleZ": 0.1, "AngleY": 0.3, "Angle": 0.5, "Arm.right": 0},
    "cruise": {"AngleZ": 0.5},
    "idle": {"Lift.right": 0.1, "Bend.right": 0.1, "Forearm.right@wave": 0.3},
-   "greet": {"EyeOpen": 0, "AngleZ": 0.4}
+   "greet": {"EyeOpen": 0, "AngleZ": 0.4, "AngleX": 0.2}
   },
   "props": {
    "idle": [[0.3672, 0.3359], [0.3516, 0.25], [0.3008, 0.3125]],

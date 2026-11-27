@@ -1081,6 +1081,29 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(sleeve.alpha[110, 100], 1.0)
         self.assertGreater(sleeve.rgba[110, 100, 0], 0.8)
 
+    def test_a_line_the_split_left_see_through_between_locks_is_solid_but_rims_and_sheer_cloth_stay(self):
+        from characters.rig.layers import composite, reproject
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[20:180, 20:180] = 0.6
+        ref[99:102, 70:130] = 0.75
+        ref[116:124, 96:104] = 0.7
+        ref[118:122, 98:102] = 1.0
+        back = self.layer("back hair", (0.6, 0.6, 0.6), (20, 180, 20, 180))
+        front = self.layer("front hair", (0.6, 0.6, 0.6), (60, 140, 60, 140))
+        back.rgba[99:102, 70:130, 3] = 0.0
+        front.rgba[99:102, 70:130, 3] = 0.4
+        for layer in (back, front):
+            layer.rgba[117:123, 97:103, 3] = 0.5
+            layer.rgba[118:122, 98:102, 3] = 0.0
+        back.rgba[25:75, 25:75, 3] = 0.5
+        reproject([back, front], ref)
+        self.assertEqual(front.alpha[100, 100], 1.0)
+        np.testing.assert_allclose(front.rgba[100, 100, :3], 0.75, atol=1e-5)
+        np.testing.assert_allclose(composite([back, front])[100, 100], 0.75, atol=1e-5)
+        self.assertEqual(back.alpha[120, 100] + front.alpha[120, 100], 0.0)
+        self.assertEqual(front.alpha[117, 100], 0.5)
+        self.assertEqual(back.alpha[45, 45], 0.5)
+
     def test_a_dark_guess_behind_an_arm_takes_the_layers_own_colors(self):
         from characters.rig.layers import clean_hidden, reproject
         ref = np.ones((200, 200, 3), np.float32)
@@ -1405,6 +1428,21 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[151, 105], 1.0)
         self.assertEqual(hair.alpha[101, 106], 1.0)
         self.assertEqual(hair.alpha[50, 70], 1.0)
+        np.testing.assert_allclose(composite(parts), before, atol=1e-5)
+
+    def test_a_sliver_an_ear_hides_in_a_sleeve_is_cleared_but_specks_that_show_stay(self):
+        from characters.rig.layers import arm_specks_off, composite
+        body = self.layer("topwear", (0.3, 0.3, 0.5), (110, 190, 40, 160))
+        sleeve = self.layer("handwear", (0.95, 0.95, 0.95), (120, 180, 60, 120), (40, 44, 100, 110),
+                            (60, 63, 20, 26), (140, 143, 150, 156))
+        ear = self.layer("ears", (0.2, 0.2, 0.25), (30, 50, 90, 130))
+        parts = [body, sleeve, ear]
+        before = composite(parts)
+        self.assertGreater(arm_specks_off(parts), 0)
+        self.assertEqual(sleeve.alpha[42, 105], 0.0)
+        self.assertEqual(sleeve.alpha[61, 22], 1.0)
+        self.assertEqual(sleeve.alpha[141, 152], 1.0)
+        self.assertEqual(sleeve.alpha[150, 90], 1.0)
         np.testing.assert_allclose(composite(parts), before, atol=1e-5)
 
     def test_with_the_toy_hint_eyes_of_a_toy_held_up_to_the_cheek_go_to_the_toy_but_hers_stay(self):

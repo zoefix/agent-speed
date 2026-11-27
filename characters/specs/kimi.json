@@ -48,6 +48,6 @@
  "rig": {
   "legsInSkirt": true,
   "approach": {"idle": {"idea": 0, "present": 0, "salute": 0, "peace": 0}},
-  "poseSwing": {"focus": {"Angle": 0.5}, "idle": {"Angle": 0.5, "Lift.left": 0.3, "Bend.left": 0.3}, "cheer": {"Skirt": 0.5}}
+  "poseSwing": {"focus": {"Angle": 0.5}, "idle": {"Angle": 0.5, "Lift.left": 0.3, "Bend.left": 0.3}, "cheer": {"Skirt": 0.5}, "overdrive": {"HairBack1": 0.5}}
  }
 }

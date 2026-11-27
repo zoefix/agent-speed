@@ -46,7 +46,9 @@
    "overdrive": {"Tail": 0.3},
    "sleepy": {"Angle": 0.5},
    "redline": {"Finger.right.3": 0.5, "Wrist.right": 0.3, "AngleX": 0.6, "AngleY": 0.6},
-   "boost": {"AngleZ": 0.6, "Arm.right": 0.4}
+   "boost": {"AngleZ": 0.6, "Arm.right": 0.4},
+   "idle": {"Forearm.right@wave": 0.3},
+   "wait": {"AngleX": 0.4, "AngleY": 0.4}
   }
  }
 }

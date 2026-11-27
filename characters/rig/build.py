@@ -390,6 +390,9 @@ def main(argv=None):
         if side in lm["arms"] and lm["arms"][side].get("tip") is not None:
             lm["hands"][side] = dict(hands.landmarks(points, lm["arms"][side]["elbow"]), side=side)
     parts, lm["hands"] = split_hands(parts, lm["hands"], reference, args.sam)
+    arm_specks = layers.arm_specks_off(parts)
+    if arm_specks:
+        print(f"specks of what the hands touch, left in the sleeves and hidden there, cleared: {arm_specks} px")
     bones = skeleton.bones(lm)
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)

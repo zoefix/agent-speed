@@ -48,6 +48,6 @@
  "rig": {
   "legsInSkirt": true,
   "swing": {"Skirt": 0.05, "Hip": 0.15, "BodyAngleZ": 0.2, "BodySway": 0.4, "Lean": 0.4, "Wrist.right": 0.4},
-  "poseSwing": {"overdrive": {"Arm.right": 0.15, "Forearm.right": 0.4}, "cruise": {"Arm.right": 0.1, "Forearm.right": 0.4}, "idle": {"Arm.right": 0.3}, "boost": {"Arm.right": 0.3}, "focus": {"AngleZ": 0.3}}
+  "poseSwing": {"overdrive": {"Arm.right": 0.15, "Forearm.right": 0.4}, "cruise": {"Arm.right": 0.1, "Forearm.right": 0.4, "HairBack1": 0.5}, "idle": {"Arm.right": 0.1, "Skirt": 0}, "boost": {"Arm.right": 0.1, "Skirt": 0}, "focus": {"AngleZ": 0.3}}
  }
 }

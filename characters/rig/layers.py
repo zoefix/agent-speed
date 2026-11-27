@@ -73,12 +73,27 @@ def owner_map(layers):
     return owner
 
 
-def reproject(layers, reference, background=1.0):
-    """Paints the original art onto the layer that owns each visible pixel, so the rest pose equals the original."""
+def reproject(layers, reference, background=1.0, depth=3, spot=2000):
+    """Paints the original art onto the layer that owns each visible pixel, so the rest pose equals the original.
+    A spot of at most `spot` px more than `depth` px inside the figure, away from its outline and from every hole in
+    it, that the split left partly see-through is solid in the art: a line between two locks of hair where both hair
+    layers fade out, a patch of white skirt read as partly paper; the desktop showed through them (a larger see-through
+    area may be sheer cloth). The topmost layer drawing it takes it, opaque."""
     total = coverage(layers)
     owner = owner_map(layers)
-    interior = total > 0.95
-    m = np.clip(total, 1e-3, 1)[..., None]
+    figure = ndimage.binary_fill_holes(ndimage.binary_closing(total > 0.5, iterations=depth)) & (total > 0.05)
+    gap = (ndimage.distance_transform_edt(figure) > depth) & (total <= 0.95)
+    spots, count = ndimage.label(gap, structure=np.ones((3, 3)))
+    if count:
+        sizes = np.bincount(spots.ravel())
+        gap = gap & (sizes[spots] <= spot)
+    if gap.any():
+        top = np.full(owner.shape, -1, np.int32)
+        for i, layer in enumerate(layers):
+            top[layer.alpha > 0.05] = i
+        owner = np.where(gap & (owner < 0), top, owner)
+    interior = (total > 0.95) | gap
+    m = np.where(gap, 1.0, np.clip(total, 1e-3, 1))[..., None]
     unblended = np.clip((reference - background * (1 - m)) / m, 0, 1)
     for i, layer in enumerate(layers):
         mine = owner == i
@@ -874,6 +889,24 @@ def _islands_to(hair, layers, frames, island, enclosed):
         hair.rgba[..., 3][piece] = 0.0
 
 
+def _far_specks(layer, speck, join, reach):
+    """Yields (core, piece) for each speck of a layer: pieces (8-connected, alpha over 0.3) within 2 * `join` px of
+    each other form a cluster; one under `speck` px in all, more than `reach` px from the rest of the layer, is a
+    speck, its piece grown 2 px over its soft edge."""
+    mass = layer.alpha > 0.3
+    clusters, count = ndimage.label(ndimage.binary_dilation(mass, iterations=join), structure=np.ones((3, 3)))
+    if count < 2:
+        return
+    clusters = np.where(mass, clusters, 0)
+    sizes = np.asarray(ndimage.sum(mass, clusters, range(1, count + 1)))
+    rest = np.isin(clusters, 1 + np.flatnonzero(sizes >= speck))
+    far = ndimage.distance_transform_edt(~rest) > reach
+    for k in 1 + np.flatnonzero((sizes > 0) & (sizes < speck)):
+        core = clusters == k
+        if far[core].all():
+            yield core, ndimage.binary_dilation(core, iterations=2) & (layer.alpha > 0) & ~(mass & ~core)
+
+
 def hair_specks_off(layers, speck=80, join=3, reach=20, cover=0.8):
     """Gives the layer they belong to the specks the split left in the front hair: a few white flecks of a tail's fur
     rim stay with the hair, and a lock's swing throws them off the tail. Pieces of the front hair (8-connected, alpha
@@ -888,19 +921,7 @@ def hair_specks_off(layers, speck=80, join=3, reach=20, cover=0.8):
         at = layers.index(hair)
         below = [layer for layer in layers[:at] if layer.tag not in skip]
         above = layers[at + 1:]
-        mass = hair.alpha > 0.3
-        clusters, count = ndimage.label(ndimage.binary_dilation(mass, iterations=join), structure=np.ones((3, 3)))
-        if count < 2:
-            continue
-        clusters = np.where(mass, clusters, 0)
-        sizes = np.asarray(ndimage.sum(mass, clusters, range(1, count + 1)))
-        rest = np.isin(clusters, 1 + np.flatnonzero(sizes >= speck))
-        far = ndimage.distance_transform_edt(~rest) > reach
-        for k in 1 + np.flatnonzero((sizes > 0) & (sizes < speck)):
-            core = clusters == k
-            if not far[core].all():
-                continue
-            piece = ndimage.binary_dilation(core, iterations=2) & (hair.alpha > 0) & ~(mass & ~core)
+        for core, piece in _far_specks(hair, speck, join, reach):
             if any((layer.alpha[core] > 0.5).mean() >= cover for layer in above):
                 hair.rgba[..., 3][piece] = 0.0
                 moved += int(piece.sum())
@@ -918,6 +939,22 @@ def hair_specks_off(layers, speck=80, join=3, reach=20, cover=0.8):
             hair.rgba[..., 3][piece] = 0.0
             moved += int(piece.sum())
     return moved
+
+
+def arm_specks_off(layers, speck=80, join=3, reach=20, cover=0.8):
+    """Clears the specks (as in `hair_specks_off`) of the arms' layers that a layer above hides by `cover`: cutting a
+    hand out of its arm leaves in the sleeve a sliver of what the fingertips touch (an ear's tip), under that ear until
+    the arm moves and carries it off as a floating dash. The rest pose stays the same. Returns the pixels cleared."""
+    cleared = 0
+    for at, arm in enumerate(layers):
+        if arm.tag not in ARM_TAGS:
+            continue
+        above = layers[at + 1:]
+        for core, piece in _far_specks(arm, speck, join, reach):
+            if any((layer.alpha[core] > 0.5).mean() >= cover for layer in above):
+                arm.rgba[..., 3][piece] = 0.0
+                cleared += int(piece.sum())
+    return cleared
 
 
 def tail_alone(layers, reference, share=0.5, min_px=2000):
