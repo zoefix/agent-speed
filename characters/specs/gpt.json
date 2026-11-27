@@ -54,7 +54,7 @@
    "focus": {"Skirt": 0.3, "HairBack": 0.1, "Wing": 0.1},
    "sleepy": {"HairBack": 0.1, "Wing": 0.1, "Skirt": 0.2},
    "boost": {"Arm.left": 0.3, "Forearm.left": 0.3, "Shoulder.left": 0.3, "HairBack": 0.1, "Foot": 0.2, "Wing": 0.2},
-   "cruise": {"HairBack": 0.1, "Lift.right": 0.1, "Bend.right": 0, "Skirt": 0.2},
+   "cruise": {"HairBack": 0.1, "Lift.right": 0, "Bend.right": 0, "Skirt": 0.2},
    "idle": {"HairBack": 0.1, "Lift.left": 0, "Bend.left": 0, "Tail": 0.3, "Skirt": 0.2},
    "greet": {"BodyAngleZ": 0.3, "Hip": 0.4, "Skirt": 0.3},
    "cheer": {"AngleX": 0.4, "AngleY": 0.4, "AngleZ": 0.4, "Hip": 0.4, "Skirt": 0.3}

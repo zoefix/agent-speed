@@ -34,6 +34,9 @@
   "hands": [
    "count",
    "flex"
+  ],
+  "exclude": [
+   "run"
   ]
  },
  "rig": {
