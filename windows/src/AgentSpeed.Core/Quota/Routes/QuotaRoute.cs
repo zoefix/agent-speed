@@ -72,10 +72,15 @@ public static class QuotaRoutes
 
 /// <summary>
 /// What one round may do (QUOTAS 9.1): the master switch, the routes that may run (source enabled and switch on), the
-/// agents that run and whether the dashboard is open.
+/// agents that run, whether the dashboard is open and the sources the menu bar / taskbar quota block shows (DESIGN 10; none
+/// by default).
 /// </summary>
 public sealed record QuotaVendorRound(long NowMs, bool NetworkEnabled, IReadOnlySet<QuotaRoute> Routes, IReadOnlySet<SourceKind> Running,
-    bool DashboardOpen, ZaiRegion ZaiRegion = ZaiRegion.Global, bool ReadsLocalNow = false);
+    bool DashboardOpen, ZaiRegion ZaiRegion = ZaiRegion.Global, bool ReadsLocalNow = false, IReadOnlySet<SourceKind>? Shown = null)
+{
+    /// <summary>The route asks as if the dashboard were open: it is, or the quota block shows one of the route's sources (issue #81).</summary>
+    public bool AsksAsOpen(QuotaRoute route) => DashboardOpen || (Shown is { Count: > 0 } shown && route.Agents().Any(shown.Contains));
+}
 
 /// <summary>A route's state as the UI shows it: its snapshot, its status line and whether it counts as signed in.</summary>
 public sealed record QuotaRouteReading(QuotaSnapshot? Snapshot = null, QuotaRouteStatus? Status = null, bool SignedIn = false, string? Host = null);

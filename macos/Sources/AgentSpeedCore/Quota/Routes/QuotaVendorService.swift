@@ -136,9 +136,9 @@ public actor QuotaVendorService {
         return state.cadence.isDue(nowMs: round.nowMs, credential: credential)
     }
 
-    /// The agent runs, or the dashboard is open.
+    /// The agent runs, the dashboard is open, or the menu bar shows the source.
     func asks(_ route: QuotaRoute, _ round: QuotaVendorRound) -> Bool {
-        round.dashboardOpen || !route.agents.isDisjoint(with: round.running)
+        round.shows(route.agents) || !route.agents.isDisjoint(with: round.running)
             || (route == .antigravity && antigravityRuns)
     }
 

@@ -57,8 +57,8 @@ public enum QuotaRoute: String, CaseIterable, Sendable {
     }
 }
 
-/// What one round may do (QUOTAS 9.1): the master switch, the switches that are on, the agents that run and whether
-/// the dashboard is open.
+/// What one round may do (QUOTAS 9.1): the master switch, the switches that are on, the agents that run, whether
+/// the dashboard is open and which sources the menu bar shows.
 public struct QuotaVendorRound: Equatable, Sendable {
     public var nowMs: Int64
     public var networkEnabled: Bool
@@ -68,9 +68,13 @@ public struct QuotaVendorRound: Equatable, Sendable {
     public var zaiRegion: QuotaRequests.ZaiRegion
     /// Local files are read again at once (a switch turned on, Settings opened).
     public var readsLocalNow: Bool
+    /// Sources whose quota stays on screen (the menu bar's quota block, DESIGN 10): their routes ask as if the
+    /// dashboard were open.
+    public var shown: Set<SourceKind>
 
     public init(nowMs: Int64, networkEnabled: Bool, routes: Set<QuotaRoute>, running: Set<SourceKind>,
-                dashboardOpen: Bool, zaiRegion: QuotaRequests.ZaiRegion = .global, readsLocalNow: Bool = false) {
+                dashboardOpen: Bool, zaiRegion: QuotaRequests.ZaiRegion = .global, readsLocalNow: Bool = false,
+                shown: Set<SourceKind> = []) {
         self.nowMs = nowMs
         self.networkEnabled = networkEnabled
         self.routes = routes
@@ -78,6 +82,12 @@ public struct QuotaVendorRound: Equatable, Sendable {
         self.dashboardOpen = dashboardOpen
         self.zaiRegion = zaiRegion
         self.readsLocalNow = readsLocalNow
+        self.shown = shown
+    }
+
+    /// The dashboard is open or a surface shows one of `sources`: a route asks even while its agent does not run.
+    public func shows(_ sources: Set<SourceKind>) -> Bool {
+        dashboardOpen || !sources.isDisjoint(with: shown)
     }
 }
 

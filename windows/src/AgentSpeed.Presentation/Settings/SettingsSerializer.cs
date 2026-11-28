@@ -47,6 +47,8 @@ public static class SettingsSerializer
             w.WriteBoolean("showUnit", s.BarShowUnit);
             w.WriteBoolean("secondary", s.BarSecondary);
             w.WriteBoolean("intelligence", s.BarIntelligence);
+            w.WriteString("quota", BarQuotaSettings.Key(s.BarQuota));
+            w.WriteString("quotaPercent", BarQuotaSettings.PercentKey(s.BarQuotaPercent));
             w.WriteNumber("offset", s.TaskbarOffset);
             w.WriteEndObject();
 
@@ -285,6 +287,8 @@ public static class SettingsSerializer
             BarShowUnit = ReadBool(taskbar, "showUnit", d.BarShowUnit),
             BarSecondary = ReadBool(taskbar, "secondary", d.BarSecondary),
             BarIntelligence = legacyIntelligence || ReadBool(taskbar, "intelligence", d.BarIntelligence),
+            BarQuota = BarQuotaSettings.Parse(ReadString(taskbar, "quota")),
+            BarQuotaPercent = BarQuotaSettings.ParsePercent(ReadString(taskbar, "quotaPercent")),
             TaskbarOffset = ReadDouble(taskbar, "offset", d.TaskbarOffset),
             ShowOrb = ReadBool(orb, "show", d.ShowOrb),
             ShowOrbs = ReadBool(root, "showOrbs", ReadBool(orb, "show", d.ShowOrb)),

@@ -180,6 +180,31 @@ struct QuotaControllerLiveTests {
         #expect(quota.zcodeKeySaved == false)
     }
 
+    /// QUOTAS 9.1, DESIGN 10: the menu bar's quota block asks for its source with the dashboard closed and the agent
+    /// not running; in glyph-only mode, where the block is hidden, it does not.
+    @Test func asksTheMenuBarsSourceWithTheDashboardClosed() async throws {
+        let folders = try Folders()
+        let credentials = folders.url("home/.kimi-code/credentials")
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try Data(#"{"access_token":"t-1","expires_at":1900000000}"#.utf8).write(to: credentials.appendingPathComponent("kimi-code.json"))
+        let vendors = Vendors()
+        vendors.reply("https://api.kimi.com/coding/v1/usages", 200, #"{"usages":{"limit_7d":{"used_ratio":0.5}}}"#)
+        let settings = Self.settings()
+        settings.barMode = .glyph
+        settings.barQuota = .kimi
+        let quota = Self.controller(folders, settings: settings, vendors: vendors)
+        #expect(quota.barSource == nil, "glyph only hides the block")
+        quota.activate()
+        defer { quota.shutdown() }
+        await Self.waitUntil { quota.vendor.routes[.kimi]?.status == .notRunning }
+        #expect(vendors.requests.isEmpty)
+        settings.barMode = .glyphValue
+        #expect(quota.barSource == .kimi)
+        await Self.waitUntil { quota.lines(.kimi) != nil }
+        #expect(quota.lines(.kimi)?.windows.map { $0.label() } == ["7d"])
+        #expect(vendors.requests.count == 1)
+    }
+
     /// QUOTAS 9.1: a disabled source reads no quota on any route and shows none; no credential is read for it.
     @Test func aDisabledSourceReadsNothingAndShowsNothing() async throws {
         let folders = try Folders()

@@ -123,6 +123,15 @@ public sealed record AppSettings
     public bool BarIntelligence { get; init; }
 
     /// <summary>
+    /// <c>settings.bar.quota</c> (DESIGN 10, Menu bar and taskbar, <i>Quota</i>): the quota source whose windows the 額度 block
+    /// shows after the 性能 block; null (default) is off. Hidden in glyph-only mode.
+    /// </summary>
+    public SourceKind? BarQuota { get; init; }
+
+    /// <summary><c>settings.bar.quota.percent</c>: the 額度 block's percents used (default) or remaining.</summary>
+    public BarQuotaPercent BarQuotaPercent { get; init; }
+
+    /// <summary>
     /// The single orb's visibility before multiple orbs (<c>orb.show</c>). Read and written back unchanged so a downgrade
     /// restores it; the app uses <see cref="ShowOrbs"/>. The same holds for the other <c>Orb*</c> values below.
     /// </summary>
@@ -428,6 +437,8 @@ public sealed record AppSettings
         RedlineTotal = HeatMath.ClampRedlineTotal(RedlineTotal),
         BarMode = Enum.IsDefined(BarMode) ? BarMode : BarDisplayMode.GlyphAndValue,
         TaskbarOffset = TaskbarPosition.Normalize(TaskbarOffset),
+        BarQuota = BarQuotaSettings.Valid(BarQuota),
+        BarQuotaPercent = Enum.IsDefined(BarQuotaPercent) ? BarQuotaPercent : BarQuotaPercent.Used,
         OrbSize = double.IsFinite(OrbSize) ? Math.Clamp(Math.Round(OrbSize), MinOrbSize, MaxOrbSize) : DefaultOrbSize,
         OrbOpacity = double.IsFinite(OrbOpacity) ? Math.Clamp(OrbOpacity, MinOrbOpacity, MaxOrbOpacity) : MaxOrbOpacity,
         Effects = Enum.IsDefined(Effects) ? Effects : EffectsIntensity.Standard,

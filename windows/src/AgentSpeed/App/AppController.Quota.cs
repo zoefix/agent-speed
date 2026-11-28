@@ -5,6 +5,7 @@ using AgentSpeed.Core.Quota;
 using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Quota.Network;
 using AgentSpeed.Core.Quota.Routes;
+using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Quota;
 using AgentSpeed.Presentation.Settings;
@@ -67,6 +68,12 @@ internal sealed partial class AppController
         _settingsModel?.SourcesPane.UpdateQuota(state, Settings);
         _dashboardDirty = true;
         FlushDashboard();
+        if (Settings.BarQuota is not null)
+        {
+            // DESIGN 10, Quota: a new snapshot, estimate or status shows on the taskbar block and its tooltip at once.
+            UpdateTaskbar();
+            RefreshTooltip();
+        }
     }
 
     private void OnQuotaSettingsChanged(AppSettings previous, AppSettings current)
@@ -106,9 +113,16 @@ internal sealed partial class AppController
     private static bool HostShows(SourceKind source, Core.Remote.RemoteHost host, Core.Remote.RemoteQuotaSwitches switches) =>
         source == SourceKind.ClaudeCode ? host.QuotaClaudeCli && switches.ClaudeCode : switches.Sources.Contains(source);
 
-    /// <summary>Some character orb has the 額度 card on: the running apps are listed every 15 s (QUOTAS 6).</summary>
-    private void UpdateQuotaDemand() =>
-        _quota?.SetCardDemand(Settings.Orbs.Orbs.Any(o => o.Visible && o.Style == OrbStyle.Character && o.CharacterReadouts.Quota));
+    /// <summary>
+    /// Some character orb has the 額度 card on, or the taskbar shows the 額度 block: the running apps are listed every 15 s
+    /// (QUOTAS 6), and the block's source asks as if the dashboard were open (QUOTAS 9.1; DESIGN 10, <i>Quota</i>: Polling).
+    /// </summary>
+    private void UpdateQuotaDemand()
+    {
+        var s = Settings;
+        _quota?.SetCardDemand(s.Orbs.Orbs.Any(o => o.Visible && o.Style == OrbStyle.Character && o.CharacterReadouts.Quota));
+        _quota?.SetBarSource(s.ShowOnTaskbar ? BarQuotaBlock.ShownSource(s) : null);
+    }
 
     /// <summary>
     /// Turning <c>quotaClaudeCli</c> on (DESIGN 5): asks first, then installs the bridge; a failure leaves the switch off and

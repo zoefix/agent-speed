@@ -54,6 +54,22 @@
                       AutomationProperties.Name="{loc:Loc settings.bar.intelligence}"
                       AutomationProperties.HelpText="{loc:Loc settings.bar.intelligence.hint}" />
         </controls:SettingsCard>
+        <!-- DESIGN 10, Quota control: right after the 性能 switch, always enabled. Its items are built in code so they keep the
+             Fluent item style while a source whose quota is not read stays shown but disabled. -->
+        <controls:SettingsCard Header="{loc:Loc settings.bar.quota}" Icon="&#xE9D2;" Description="{Binding BarQuota.Hint}">
+            <ComboBox x:Name="QuotaCombo" MinWidth="200" SelectedIndex="{Binding BarQuota.Index, Mode=TwoWay}"
+                      AutomationProperties.Name="{loc:Loc settings.bar.quota}" AutomationProperties.HelpText="{Binding BarQuota.Hint}" />
+        </controls:SettingsCard>
+        <controls:SettingsCard Header="{loc:Loc settings.bar.quota.percent}" Icon="&#xEB05;" IsEnabled="{Binding BarQuota.IsOn}">
+            <Border Style="{StaticResource SegmentedContainer}">
+                <StackPanel Orientation="Horizontal">
+                    <RadioButton Style="{StaticResource SegmentedItem}" GroupName="TaskbarQuotaPercent" MinWidth="64"
+                                 Content="{loc:Loc settings.bar.quota.percent.used}" IsChecked="{Binding BarQuota.Used, Mode=TwoWay}" />
+                    <RadioButton Style="{StaticResource SegmentedItem}" GroupName="TaskbarQuotaPercent" MinWidth="64"
+                                 Content="{loc:Loc settings.bar.quota.percent.remaining}" IsChecked="{Binding BarQuota.Remaining, Mode=TwoWay}" />
+                </StackPanel>
+            </Border>
+        </controls:SettingsCard>
         <controls:SettingsCard Header="{loc:Loc settings.liveUnit}" Icon="&#xEC4A;" Description="{loc:Loc settings.liveUnit.hint}">
             <Border Style="{StaticResource SegmentedContainer}">
                 <StackPanel Orientation="Horizontal">

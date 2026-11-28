@@ -2066,9 +2066,10 @@ Glanceable and calm; it must never jitter in width.
   and in the tooltip as `a11y.bar.money`. In 選單列 / 工作列 the live value control has three choices —
   `settings.liveUnit.tokens`, `settings.liveUnit.cost` and `settings.liveUnit.both` (tok/s with the money block after
   it; tok/s alone stays the default) — so showing both is one visible choice rather than a separate switch.
-- Readout blocks (optional, both default off): network speed (`↓` / `↑`, `settings.bar.traffic`) and 性能, the
-  highest performance score (section 12), with 思考 (`性能` / `思考`, `settings.bar.intelligence`). They are fixed-width
-  two-line blocks after the value and the money block, shown alone or together (section 10, *Menu bar and taskbar*).
+- Readout blocks (optional, all default off): network speed (`↓` / `↑`, `settings.bar.traffic`), 性能, the
+  highest performance score (section 12), with 思考 (`性能` / `思考`, `settings.bar.intelligence`), and 額度, one
+  source's subscription quota (`5h` / `7d`, `settings.bar.quota`; QUOTAS). They are fixed-width two-line blocks after
+  the value and the money block, shown alone or together (section 10, *Menu bar and taskbar*).
 - Click: open/close the dashboard. Right-click (Windows) / ⌥-click (macOS): quick menu.
 - The widget follows the system/taskbar light or dark theme for text; the glyph keeps heat colors.
 
@@ -2823,7 +2824,8 @@ with Mica). Sections:
   shows that metric's values (compact `k`/`M`). Below the redline: the title theme picker and the custom set editor
   (Title themes, below).
 - **選單列 / 工作列 Menu bar / Taskbar** — Display mode, Colored glyph, Show unit, `settings.bar.traffic` (network
-  speed, section 10), `settings.bar.intelligence` (性能, section 10; the persisted key is unchanged), `settings.liveUnit` (section 9). Windows adds, right after
+  speed, section 10), `settings.bar.intelligence` (性能, section 10; the persisted key is unchanged),
+  `settings.bar.quota` and `settings.bar.quota.percent` (額度, section 10), `settings.liveUnit` (section 9). Windows adds, right after
   `settings.bar.show`, the card `settings.taskbar.position` with the hint `settings.taskbar.position.hint` and the
   button `settings.taskbar.position.reset`: it puts the widget back at its default spot (`taskbar.offset` 0, section
   3, Position on the taskbar) and is disabled while the widget is already there, whether or not the widget is shown.
@@ -3559,18 +3561,21 @@ unavailable.
 
 ### Menu bar and taskbar
 
-Two independent readout blocks can follow the menu bar or taskbar value (user's request, 2026-10-29: the score and
-the network speed together, the score with a switch of its own; 性能 replaced 智力 in it the same day):
+Three independent readout blocks can follow the menu bar or taskbar value (user's request, 2026-10-29: the score and
+the network speed together, the score with a switch of its own; 性能 replaced 智力 in it the same day; the quota
+block, issue #81, user's choice 2026-11-27: on both platforms):
 - `settings.bar.traffic` picks the network block. Stored values `off` (default), `machine` and `agents`; an unknown
   value reads as `off`. The control is labelled `settings.bar.traffic` with the choices `settings.bar.traffic.off`,
   `.machine` and `.agents`.
 - `settings.bar.intelligence` (a switch, default off) adds the intelligence block.
 - A stored `intelligence` from an earlier build migrates once to `settings.bar.traffic` = `off` and
   `settings.bar.intelligence` = on.
+- `settings.bar.quota` picks the quota block's source, and `settings.bar.quota.percent` whether its percents are used
+  or remaining (*Quota*, below).
 
 Order, left to right: the value, the money block (section 3) when shown, the network block, the intelligence block,
-each after an 8 pt (8 px) gap. With both on, the item is the sum of both fixed widths, and still never changes width
-with the values.
+the quota block, each after an 8 pt (8 px) gap. With several on, the item is the sum of their widths, and still never
+changes width with the values.
 
 - **Block**: after the value and after the money block when section 3 shows one, 8 pt gap; two lines centred on the
   bar, 9 pt (menu bar) / 10 px (taskbar), weight 500, tabular digits, 10 pt / 11 px pitch; numbers in the label color
@@ -3621,6 +3626,74 @@ with the values.
     agent 中最高，思考每秒 128 個 token`; the thinking rate in METRICS 7 form), `a11y.orb.intel.only` while line 2 is hidden,
     or `intel.none` while 性能 is none. Windows tooltip: its first line adds the same text after ` · `, where the
     traffic words go, and a second line `perf.tooltip.top` names the agent that supplies the score.
+- **Quota** (`settings.bar.quota` set to a source; issue #81, user's choices 2026-11-27): one source's subscription
+  quota (QUOTAS) — the windows its dashboard row shows (section 4, *Quota lines*), read by the same readers on the same
+  cadence (QUOTAS 6, 9.1), never a new request of its own kind.
+
+  - **Choice.** Stored values `off` (default) or a quota source of this computer by its source key (`codex`,
+    `claudeCode`, `claudeDesktop`, `grokBuild`, `devin`, `antigravity`, `kimi`, `gemini`, `droid`, `zcode`, `qoder`,
+    `qoderCli`, `workbuddy`); an unknown value reads as `off`. One source, as the dashboard lists them: each source its
+    own entry (Qoder IDE and Qoder CLI both, showing their one account), so a choice never depends on which agent runs.
+    A remote host's quotas stay in Dashboard → Hosts (section 13): the bar is this computer's.
+  - **Percent.** `settings.bar.quota.percent`: `used` (default, as the dashboard and the 額度 card show it, QUOTAS 7)
+    or `remaining` (`100 −` the shown integer, so `68%` used reads `32%` remaining and the two always add up to 100).
+    An extrapolated percent (QUOTAS 10.7) keeps its `≈` either way.
+  - **Lines** (QUOTAS 2 order): line 1 the first window, line 2 the second — `5h` over `7d` for Codex and Claude, the
+    issue's example. A source with more windows shows its first two: the unnamed windows come
+    first, shortest first, so the lines never trade places when the values change (a ranking by how full a window is
+    would swap labels under the user's eyes); every window is in the tooltip and the spoken words. A source with one
+    window (a weekly-only account, Qoder's credits) shows line 1 alone, centred vertically in the block like the
+    intelligence block's line 1 alone (its baseline halfway between the two lines' baselines); nothing beside it moves.
+
+    | Cell (left to right) | Content | Alignment |
+    | --- | --- | --- |
+    | label | the window's label (`5h`, `7d`, `Fable 7d`, `Pro 1d`, `月`; QUOTAS 2, 9.1) in the secondary color | left; as wide as the wider shown label |
+    | 3 pt / 3 px gap | | |
+    | number | the percent, `68%` (QUOTAS 7: no space), with a leading `≈` in the secondary color while extrapolated | right; as wide as `100%` |
+
+    - The source's name is not drawn: the block stays narrow (50 pt with `5h` / `7d` in SF Pro 9 pt, every cell
+      rounded up to a whole point, the 8 pt gap included), and the tooltip and the spoken words name it.
+    - Both cells keep section 3's rule for the value: a wider text widens its cell at once, and the cell narrows only
+      after the narrower width has held for 6 s. So a change of the source's windows (a model week appearing, the
+      unavailable form's longer `quota.title`) or an extrapolated `≈100%` (wider than `100%` by the `≈`) never makes
+      the item flicker, and the usual `68%` sits close to its label instead of in a cell sized for a rare case.
+  - **Colors.** Labels and `≈` in the secondary color. A number in the label color at 85 %, as the other blocks; from
+    95 % used (5 % remaining) in red — the dashboard's red percent (section 4): the system red, on a light menu bar
+    darkened until it keeps 4.5:1; Windows the Fluent critical color (`#C42B1C` light, `#FF99A4` dark) — so an
+    exhausted window reads at a glance. Increase Contrast: numbers in the full label color, red stays. Windows high
+    contrast: numbers in the theme's text color (no red), labels in its gray-text color, as the intelligence block.
+  - **Stale and signed out** (QUOTAS 2 *Age*): a line whose window's time is more than 1 hour old, or every line
+    while the source's quota route reports a sign-in that no longer works (`noCredential`, `noBrowser`, `expired`,
+    `denied`; QUOTAS 9.1), shows its number in the secondary color, without red — pale, like a resting score, so an
+    old value never looks like a current amount; the tooltip says how old it is. A window whose reset has passed
+    shows `0%` used (`100%` remaining) as QUOTAS 2 says, and stays pale while its snapshot is old.
+  - **Unavailable**: while the source is disabled or its quota switch is off (section 5, *額度*), and while it has no
+    snapshot with a window (nothing read yet, signed out, a plan without a quota, the network switch off before a
+    first value), the block shows line 1 alone: `quota.title` (額度 / 额度 / Quota / 利用枠) and `–`, both in the
+    secondary color, centred like a single window. It never shows `0%` for a missing value. Chosen over hiding the
+    block: a block that came and went would shift the items beside it, and `–` says the quota is unknown without
+    claiming a number.
+  - **Tooltip** (macOS: the item's tooltip; Windows: the hover tooltip) adds, after its lines above, the source's full
+    quota: `bar.quota.title` with the source's name, ` · ` and `quota.updated` with the snapshot's time (QUOTAS 2; the
+    time alone today, else date and time), then one line per window — every window, not only the two shown — in
+    QUOTAS 2 order: `a11y.quota.window` (`7d 已用 42%，週五 09:00 重置`), with `remaining` `a11y.quota.windowLeft`
+    (`7d 剩餘 58%，週五 09:00 重置`), each `…NoReset` without a reset time; then `list.separator` and
+    `a11y.quota.estimated` while extrapolated; then ` · ` and `quota.age` while the window is more than 1 hour old.
+    Unavailable: `bar.quota.off` (`Codex：額度已關閉（資料來源）`) or `bar.quota.none` (`Codex：尚無額度資料`). A
+    status line of the source's route other than `ok` (DESIGN 5, *額度, phase 2*: `找不到登入資料`, `上次查詢失敗，稍後重試`)
+    follows as the last line. Windows sets the header line in the tooltip's text color and the window lines in its
+    secondary color at 12 px with tabular digits, 6 DIP below the lines above; the macOS tooltip is plain text.
+  - **Accessibility**: the item's label adds, after the intelligence words, `a11y.bar.quota` with the source's name
+    and every window's words as in the tooltip, joined by `list.separator` (`Codex 額度：5h 已用 68%，3 小時 12 分後重置、
+    7d 已用 42%，週五 09:00 重置`); unavailable, the `bar.quota.off` or `bar.quota.none` sentence. The route's status
+    sentence of the tooltip follows after `list.separator`, so a number that is pale because of a sign-in is said why.
+    The Windows tooltip's first line does not repeat them: its own quota lines carry them.
+  - **Updates**: whenever the quota state changes (a new snapshot, an estimate, a status, a switch) and each minute
+    (resets and ages move on, QUOTAS 7); characters are replaced in their cells, no animation.
+  - **Polling**: while the block is on (a source chosen, the display mode not glyph only; on Windows also
+    `settings.bar.show` on, as for the network block's sampling), the light process listing runs as for the 額度 card
+    (QUOTAS 6), and the chosen source's vendor route asks on its cadence as if the dashboard were open (QUOTAS 9.1), so
+    the bar stays current with the dashboard and the orbs closed.
 - **Settings**:
   - **Network control.** `settings.bar.traffic` appears in 選單列 / 工作列 (section 5) and in 網路流量 (*Settings →
     網路流量*, below). In 選單列 / 工作列 it is always enabled. While `settings.traffic.enabled` is off, the two
@@ -3629,6 +3702,16 @@ with the values.
   - **Intelligence switch.** `settings.bar.intelligence` appears only in 選單列 / 工作列, as the row right after
     `settings.bar.traffic`, a switch that is always enabled. While it is on, its caption is
     `settings.bar.intelligence.hint`.
+  - **Quota control.** `settings.bar.quota` appears only in 選單列 / 工作列, as the row right after the intelligence
+    switch: a popup with `settings.bar.quota.off` and every quota source in source order by its name (`source.*`). A
+    source whose quota is not read (the source disabled or its quota switch off, section 5) is shown but disabled, as
+    the network choices are without measuring; a stored choice of it stays selected and the block shows the
+    unavailable form. While a source is chosen, its caption is `settings.bar.quota.hint`. Under it,
+    `settings.bar.quota.percent` with the segments `settings.bar.quota.percent.used` and `.remaining`, disabled while
+    the popup is off. The popup is always enabled, like the intelligence switch.
+  - **Storage.** macOS: `barQuota` (`off` or a source key) and `barQuotaPercent` (`used` / `remaining`) in the app's
+    defaults. Windows: `taskbar.quota` and `taskbar.quotaPercent` in the settings file, with the same values; an
+    unknown value reads as the default.
 
 ### Dashboard
 

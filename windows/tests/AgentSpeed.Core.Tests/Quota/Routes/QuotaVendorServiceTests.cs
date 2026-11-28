@@ -93,6 +93,36 @@ public sealed class QuotaVendorServiceTests
         Assert.True(readings.SignedIn(SourceKind.Kimi));
     }
 
+    /// <summary>Issue #81 (QUOTAS 9.1, 9.4): the quota block's source asks as if the dashboard were open, and only that source.</summary>
+    [Fact]
+    public async Task TheQuotaBlocksSourceAsksAsIfTheDashboardWereOpen()
+    {
+        using var h = Harness();
+        var none = new HashSet<SourceKind>();
+
+        // Nothing shown changes nothing: no agent runs and the dashboard is closed.
+        var readings = await h.RoundAsync(AllRoutes, running: none, shown: none);
+        Assert.Empty(h.Scripted.Requests);
+        Assert.Equal((0, 0), (h.Browser.Reads, h.Locator.Calls));
+        Assert.Equal(QuotaStatusKind.NotRunning, readings.Status(QuotaRoute.Kimi)?.Kind);
+
+        // The block shows Kimi Code: its route asks although Kimi does not run; the others still wait.
+        readings = await h.RoundAsync(AllRoutes, running: none, shown: new HashSet<SourceKind> { SourceKind.Kimi });
+        Assert.Equal(1, h.Scripted.Count(QuotaHosts.Kimi));
+        Assert.Single(h.Scripted.Requests);
+        Assert.Equal(QuotaStatusKind.Ok, readings.Status(QuotaRoute.Kimi)?.Kind);
+        Assert.Equal(QuotaStatusKind.NotRunning, readings.Status(QuotaRoute.Gemini)?.Kind);
+        Assert.Equal(0, h.Locator.Calls);
+
+        // Qoder CLI asks for Qoder's one account; Antigravity's servers are looked for and asked.
+        readings = await h.RoundAsync(AllRoutes, running: none, shown: new HashSet<SourceKind> { SourceKind.QoderCli, SourceKind.Antigravity });
+        Assert.Equal(1, h.Scripted.Count(QuotaHosts.Qoder));
+        Assert.Equal(1, h.Locator.Calls);
+        Assert.Equal(QuotaStatusKind.Ok, readings.Status(QuotaRoute.Antigravity)?.Kind);
+        Assert.NotNull(readings.Snapshot(SourceKind.QoderCli));
+        Assert.Equal(QuotaStatusKind.NotRunning, readings.Status(QuotaRoute.Droid)?.Kind);
+    }
+
     [Fact]
     public async Task CadenceFiveMinutesFifteenAfterAFailureAndNeverAfterARefusal()
     {

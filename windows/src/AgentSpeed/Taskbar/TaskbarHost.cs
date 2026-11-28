@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using AgentSpeed.App;
 using AgentSpeed.Core;
 using AgentSpeed.Interop;
+using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Layout;
 using AgentSpeed.Presentation.Orb;
 
@@ -89,6 +90,12 @@ internal sealed unsafe class TaskbarHost : IDisposable
     private readonly DispatcherTimer _secondaryTimer;
     private double _secondaryScale;
 
+    /// <summary>The quota block's label and number cells (DESIGN 10): each grows at once and narrows only after the same delay.</summary>
+    private readonly WidthHold _quotaLabel = new(ShrinkDelayMs);
+    private readonly WidthHold _quotaNumber = new(ShrinkDelayMs);
+    private readonly DispatcherTimer _quotaTimer;
+    private double _quotaScale;
+
     public TaskbarHost(Action<TaskbarSignal> signal)
     {
         _signal = signal;
@@ -110,6 +117,12 @@ internal sealed unsafe class TaskbarHost : IDisposable
             Ensure();
         }, _dispatcher);
         _secondaryTimer.Stop();
+        _quotaTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(ShrinkDelayMs + 50), DispatcherPriority.Background, (_, _) =>
+        {
+            _quotaTimer!.Stop();
+            Ensure();
+        }, _dispatcher);
+        _quotaTimer.Stop();
         s_current = this;
     }
 
@@ -124,6 +137,7 @@ internal sealed unsafe class TaskbarHost : IDisposable
 
         _state = state;
         UpdateSecondaryCell(_scale > 0 ? _scale : 1);
+        UpdateQuotaCells(_scale > 0 ? _scale : 1);
         _scene.Redline = state.Redline;
         _scene.ReduceMotion = state.ReduceMotion;
         _scene.SetTarget(state.Value, state.Tier);
@@ -195,6 +209,7 @@ internal sealed unsafe class TaskbarHost : IDisposable
         _safety.Stop();
         _shrinkTimer.Stop();
         _secondaryTimer.Stop();
+        _quotaTimer.Stop();
         Teardown();
         UnwatchTaskbar();
         _surface.Dispose();
@@ -227,6 +242,7 @@ internal sealed unsafe class TaskbarHost : IDisposable
 
         var scaleChanged = Math.Abs(geo.Scale - _scale) > 0.001 || geo.Vertical != _vertical;
         UpdateSecondaryCell(geo.Scale);
+        UpdateQuotaCells(geo.Scale);
         if (_drag is not null && scaleChanged)
         {
             // The taskbar turned or changed DPI under the pointer: the press no longer maps onto it.
@@ -542,6 +558,41 @@ internal sealed unsafe class TaskbarHost : IDisposable
         }
     }
 
+    /// <summary>
+    /// Sizes the quota block's cells (DESIGN 10, Menu bar and taskbar, <i>Quota</i>): a wider label or percent widens its cell at
+    /// once, and a cell narrows only after the narrower width has held for 6 s, so a window coming and going or an extrapolated
+    /// <c>≈100%</c> never makes the widget flicker.
+    /// </summary>
+    private void UpdateQuotaCells(double scale)
+    {
+        var needed = _renderer.QuotaCellsNeeded(_state, scale);
+        if (needed.Number <= 0)
+        {
+            _quotaLabel.Reset();
+            _quotaNumber.Reset();
+            _renderer.QuotaCells = default;
+            _quotaTimer.Stop();
+            return;
+        }
+
+        var force = Math.Abs(scale - _quotaScale) > 0.001;
+        _quotaScale = scale;
+        var now = Environment.TickCount64;
+        var label = _quotaLabel.Resolve((int)Math.Ceiling(needed.Label * scale), now, force);
+        var number = _quotaNumber.Resolve((int)Math.Ceiling(needed.Number * scale), now, force);
+        _renderer.QuotaCells = new BarQuotaCells(label / scale, number / scale);
+        var due = Math.Min(_quotaLabel.DueAt ?? long.MaxValue, _quotaNumber.DueAt ?? long.MaxValue);
+        if (due == long.MaxValue)
+        {
+            _quotaTimer.Stop();
+        }
+        else if (!_quotaTimer.IsEnabled)
+        {
+            _quotaTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(50, due - now + 50));
+            _quotaTimer.Start();
+        }
+    }
+
     /// <summary>The widget grows at once but shrinks only after the shorter width has held for 6 s.</summary>
     private int ResolveLength(int desired, bool force)
     {
@@ -565,7 +616,7 @@ internal sealed unsafe class TaskbarHost : IDisposable
         var width = Math.Max(1, _screenRect.Width);
         var height = Math.Max(1, _screenRect.Height);
         var key = string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{width}x{height}|{_scale:F3}|{_state.ValueText ?? SpeedFormat.Speed(_state.Value)}|{_state.ValueMuted}|{_state.Secondary?.Live.Number}|{_state.Secondary?.Today.Number}|{_state.Secondary?.Live.Dim}|{_state.Secondary?.Today.Dim}|{_renderer.SecondaryCell:F2}|{_state.Tier}|{Math.Round(_scene.Heat * 720)}|{Math.Round(_scene.FillOpacity * 40)}|{Math.Round(_scene.Glow * 40)}|{_hovered}|{_pressed}|{_state.TaskbarDark}|{_state.HighContrast}|{_state.ColoredGlyph}|{_state.Mode}|{_state.ShowUnit}|{_state.Traffic?.Rx?.Text}|{_state.Traffic?.Tx?.Text}|{_state.Traffic?.Bits}|{_state.Intelligence?.Label}|{_state.Intelligence?.Index}|{_state.Intelligence?.Form}|{_state.Intelligence?.Provisional}|{_state.Intelligence?.Thinking}|{_state.Intelligence?.ThinkingDim}|{_state.Intelligence?.ThinkingHidden}");
+            $"{width}x{height}|{_scale:F3}|{_state.ValueText ?? SpeedFormat.Speed(_state.Value)}|{_state.ValueMuted}|{_state.Secondary?.Live.Number}|{_state.Secondary?.Today.Number}|{_state.Secondary?.Live.Dim}|{_state.Secondary?.Today.Dim}|{_renderer.SecondaryCell:F2}|{_state.Tier}|{Math.Round(_scene.Heat * 720)}|{Math.Round(_scene.FillOpacity * 40)}|{Math.Round(_scene.Glow * 40)}|{_hovered}|{_pressed}|{_state.TaskbarDark}|{_state.HighContrast}|{_state.ColoredGlyph}|{_state.Mode}|{_state.ShowUnit}|{_state.Traffic?.Rx?.Text}|{_state.Traffic?.Tx?.Text}|{_state.Traffic?.Bits}|{_state.Intelligence?.Label}|{_state.Intelligence?.Index}|{_state.Intelligence?.Form}|{_state.Intelligence?.Provisional}|{_state.Intelligence?.Thinking}|{_state.Intelligence?.ThinkingDim}|{_state.Intelligence?.ThinkingHidden}|{_state.Quota?.DrawKey}|{_renderer.QuotaCells.Label:F2}|{_renderer.QuotaCells.Number:F2}");
         if (!force && key == _renderKey)
         {
             beforePresent?.Invoke();

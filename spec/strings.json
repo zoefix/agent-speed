@@ -3228,6 +3228,30 @@
     "en": "%@ per second, %@ today",
     "ja": "毎秒 %@、今日 %@"
   },
+  "a11y.bar.quota": {
+    "zh-Hant": "%@ 額度：%@",
+    "zh-Hans": "%@ 额度：%@",
+    "en": "%@ quota: %@",
+    "ja": "%@ の利用枠：%@"
+  },
+  "bar.quota.title": {
+    "zh-Hant": "%@ 額度",
+    "zh-Hans": "%@ 额度",
+    "en": "%@ quota",
+    "ja": "%@ の利用枠"
+  },
+  "bar.quota.none": {
+    "zh-Hant": "%@：尚無額度資料",
+    "zh-Hans": "%@：暂无额度数据",
+    "en": "%@: no quota data yet",
+    "ja": "%@：利用枠のデータはまだありません"
+  },
+  "bar.quota.off": {
+    "zh-Hant": "%@：額度已關閉（資料來源）",
+    "zh-Hans": "%@：额度已关闭（数据来源）",
+    "en": "%@: quota is off (Data Sources)",
+    "ja": "%@：利用枠はオフです（データソース）"
+  },
   "settings.liveUnit.hint": {
     "zh-Hant": "用於選單列或工作列和面板；每個懸浮窗可各自選擇單位。",
     "zh-Hans": "用于菜单栏或任务栏和面板；每个悬浮窗可以单独选择单位。",
@@ -4691,6 +4715,42 @@
     "zh-Hans": "在数值旁显示所有 agent 中最高的性能分数（1000 为参考水平，没有上限）与每秒思考 token 数；没有分数时显示“–”。",
     "en": "Shows the highest performance score among all agents (1000 is the reference level, with no upper limit) and their thinking tokens per second next to the value, and – when there is no score.",
     "ja": "数値の横に、すべての agent のうち最も高い性能スコア（1000 が基準、上限なし）と毎秒の思考トークン数を表示します。スコアがないときは「–」です。"
+  },
+  "settings.bar.quota": {
+    "zh-Hant": "顯示額度",
+    "zh-Hans": "显示额度",
+    "en": "Show quota",
+    "ja": "利用枠を表示"
+  },
+  "settings.bar.quota.off": {
+    "zh-Hant": "不顯示",
+    "zh-Hans": "不显示",
+    "en": "Off",
+    "ja": "表示しない"
+  },
+  "settings.bar.quota.hint": {
+    "zh-Hant": "在數值旁顯示這個來源的前兩個額度週期（例如 5h 和 7d）。游標停在上面時，可以看到每個週期的百分比、重置時間和更新時間；超過 1 小時沒有更新的數字會變淡，沒有資料時顯示「–」。",
+    "zh-Hans": "在数值旁显示这个来源的前两个额度周期（例如 5h 和 7d）。鼠标停在上面时，可以查看每个周期的百分比、重置时间和更新时间；超过 1 小时没有更新的数字会变淡，没有数据时显示“–”。",
+    "en": "Shows this source's first two quota windows (such as 5h and 7d) next to the value. Hover over it for every window's percent, reset time and update time; a number more than an hour old turns pale, and – means there is no quota data.",
+    "ja": "数値の横に、このソースの最初の 2 つの利用枠の期間（5h と 7d など）を表示します。ポインタを合わせると、各期間の割合・リセット時刻・更新時刻を確認できます。1 時間以上更新されていない数値は薄く表示され、データがないときは「–」です。"
+  },
+  "settings.bar.quota.percent": {
+    "zh-Hant": "百分比",
+    "zh-Hans": "百分比",
+    "en": "Percent",
+    "ja": "割合"
+  },
+  "settings.bar.quota.percent.used": {
+    "zh-Hant": "已用",
+    "zh-Hans": "已用",
+    "en": "Used",
+    "ja": "使用済み"
+  },
+  "settings.bar.quota.percent.remaining": {
+    "zh-Hant": "剩餘",
+    "zh-Hans": "剩余",
+    "en": "Remaining",
+    "ja": "残り"
   },
   "history.chart.traffic": {
     "zh-Hant": "網路流量",
@@ -7661,6 +7721,18 @@
     "zh-Hans": "%@ 已用 %d%%",
     "en": "%@ %d%% used",
     "ja": "%@ %d%% 使用"
+  },
+  "a11y.quota.windowLeft": {
+    "zh-Hant": "%@ 剩餘 %d%%，%@",
+    "zh-Hans": "%@ 剩余 %d%%，%@",
+    "en": "%@ %d%% left, %@",
+    "ja": "%@ 残り %d%%、%@"
+  },
+  "a11y.quota.windowLeftNoReset": {
+    "zh-Hant": "%@ 剩餘 %d%%",
+    "zh-Hans": "%@ 剩余 %d%%",
+    "en": "%@ %d%% left",
+    "ja": "%@ 残り %d%%"
   },
   "a11y.orb.quota": {
     "zh-Hant": "額度：%@",

@@ -171,5 +171,12 @@ public sealed class AntigravityReportRouteTests : IDisposable
         readings = await _h.RoundAsync(Route);
         Assert.Equal(2, Reports);
         Assert.Equal(QuotaStatusKind.Ok, readings.Status(QuotaRoute.Antigravity)?.Kind);
+
+        // The quota block shows Antigravity (issue #81): the report runs as with the dashboard open, though nothing runs.
+        _h.Now += 15 * Minute;
+        _h.Locator.AgyRuns = false;
+        readings = await _h.RoundAsync(Route, running: new HashSet<SourceKind>(), shown: new HashSet<SourceKind> { SourceKind.Antigravity });
+        Assert.Equal(3, Reports);
+        Assert.Equal(QuotaStatusKind.Ok, readings.Status(QuotaRoute.Antigravity)?.Kind);
     }
 }

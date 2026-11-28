@@ -29,6 +29,8 @@ struct MenuBarPane: View {
                     .disabled(settings.barMode == .glyph)
 
                 BarIntelligenceToggle(model: model)
+
+                BarQuotaControls(model: model)
             }
 
             Section {

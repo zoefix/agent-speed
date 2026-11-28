@@ -3,7 +3,8 @@
 Agent Speed shows how much of each subscription's usage limits the user has used: for every limit window an account
 has (a 5-hour window, a weekly window, a weekly limit of one model), the used percentage and the time it resets. The
 dashboard's Sources rows show every source that has a quota; the `character` orb's 額度 card shows the sources whose
-app runs and is signed in. The UI is DESIGN 4 (Sources), 2a.6 (*Readouts*, 額度) and 5 (Data sources); the fixtures are
+app runs and is signed in; the menu bar / taskbar quota block shows one source the user picks. The UI is DESIGN 4
+(Sources), 2a.6 (*Readouts*, 額度), 10 (*Menu bar and taskbar*) and 5 (Data sources); the fixtures are
 checked by `spec/tools/quota_reference.py --check-fixtures`. Status: specified 2026-11-10 (user's request); phase 1
 covers Codex, Claude Desktop and Claude Code; phase 2 (section 9) adds Grok Build, Devin, Antigravity, Kimi Code,
 Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy. Section 10 (2026-11-11) estimates each window's cap in
@@ -380,8 +381,9 @@ at least one window.
 - Only the named keys are looked at. `auth.json` and `.claude.json` are parsed in memory and never copied, kept or
   logged.
 - They are read at most once a minute, and again when their modification time changes.
-- Processes come from the process table when METRICS 10.10 lists it. Otherwise, while an orb shows the 額度 card, a
-  listing runs every 15 s (one listing ≈ 1.6 ms on Windows).
+- Processes come from the process table when METRICS 10.10 lists it. Otherwise, while an orb shows the 額度 card or
+  the menu bar / taskbar shows the quota block (DESIGN 10, *Menu bar and taskbar*; issue #81), a listing runs every
+  15 s (one listing ≈ 1.6 ms on Windows).
 
 ## 7. Formatting
 
@@ -488,8 +490,10 @@ Sources with no quota to show:
   the old account's numbers.
 
 **Cadence.**
-- A vendor request runs at most every 5 minutes per source, and only while the source runs (section 6, rows below) or
-  the dashboard is open.
+- A vendor request runs at most every 5 minutes per source, and only while the source runs (section 6, rows below),
+  the dashboard is open, or the menu bar / taskbar quota block shows that source (DESIGN 10; issue #81, 2026-11-27:
+  the bar is a quota surface that stays visible, so it asks like an open dashboard, for its one source only). The
+  round carries the shown sources beside the running ones; a route asks when one of its sources is in either.
 - A failure waits 15 minutes.
 - `401` and `403` stop the source's requests until its credential changes (new file modification time, a new cookie,
   a new key).
@@ -601,9 +605,9 @@ token file, the keychain) is never read.
   (`remainingFraction`, `resetTime`) → `fiveHour` named by the config's `label`.
 - **CLI usage report** (CodexBar's route for agy 1.2.2 and later, 2026-11-14). A round in which no server answered
   (none found, or every address failed or refused; an answer without windows is an answer) runs it, and its outcome
-  is the round's. It runs only while an `agy` process runs (METRICS 10.5, Agent Speed's own excepted) or the dashboard
-  is open, under the route's cadence (9.1: at most every 5 minutes, 15 after a failure) and its network rule
-  (`networkEnabled`, the source and `quotaAntigravity` on): agy itself asks Google for the values with its own
+  is the round's. It runs only while an `agy` process runs (METRICS 10.5, Agent Speed's own excepted), the dashboard
+  is open or the menu bar / taskbar shows Antigravity's quota (9.1), under the route's cadence (9.1: at most every 5
+  minutes, 15 after a failure) and its network rule (`networkEnabled`, the source and `quotaAntigravity` on): agy itself asks Google for the values with its own
   sign-in. A refusal from the servers stops the route (9.1) only in a round that cannot run the report. Without an
   agy binary there is no report, and the round keeps the servers' outcome (none found: not running).
   - **Binary**: `~/.local/bin/agy` (agy's installer), else the first `agy` on the app's `PATH`. Windows

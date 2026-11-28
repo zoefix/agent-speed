@@ -672,11 +672,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         UpdateTaskbar();
         _tray?.Update(TrayState());
-
-        if (_tooltipShown)
-        {
-            _tooltip?.SetText(LiveLine(), LiveMoney() is { } money ? money.HoverLine : DisplayText.TodaySummary(snapshot, _loc), TooltipTop());
-        }
+        RefreshTooltip();
 
         if (!_historyStarted && snapshot.State.Kind != MonitorStateKind.Starting && _historyStartFallback is not null)
         {
@@ -831,10 +827,11 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             accessible = $"{accessible}{SpokenSeparator}{secondary.Spoken}";
         }
 
-        // DESIGN 10: the network block's words first, then the intelligence block's.
+        // DESIGN 10: the network block's words first, then the intelligence block's, then the quota block's.
         var traffic = BarTrafficBlock.From(s, _traffic.Snapshot, _loc);
         var intelligence = BarIntelligence();
-        accessible = BarReadouts.Append(accessible, SpokenSeparator, traffic, intelligence);
+        var quota = BarQuota();
+        accessible = BarReadouts.Append(accessible, SpokenSeparator, traffic, intelligence, quota);
 
         _lastTaskbarState = new TaskbarState(
             s.ShowOnTaskbar,
@@ -854,9 +851,28 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             secondary,
             traffic,
             intelligence,
+            quota,
             s.TaskbarOffset);
         _taskbar.Update(_lastTaskbarState);
     }
+
+    /// <summary>
+    /// The taskbar 額度 block (DESIGN 10, <i>Quota</i>): the chosen source's windows now. The engine's snapshots (at least every
+    /// 500 ms) rebuild it, so resets and ages move on each minute without a timer of its own.
+    /// </summary>
+    private BarQuotaBlock? BarQuota() => BarQuotaBlock.From(Settings, Quota, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), _loc);
+
+    /// <summary>The hover tooltip's lines again while it shows (DESIGN 3, 10).</summary>
+    private void RefreshTooltip()
+    {
+        if (_tooltipShown)
+        {
+            _tooltip?.SetText(LiveLine(), TooltipSummary(), TooltipTop(), BarQuota());
+        }
+    }
+
+    /// <summary>The tooltip's line under the first: the money hover line with the live value money, else today's summary.</summary>
+    private string TooltipSummary() => LiveMoney() is { } money ? money.HoverLine : DisplayText.TodaySummary(_speed.Snapshot, _loc);
 
     /// <summary>The taskbar intelligence block, its thinking line hidden after 3 s at 0 (DESIGN 10).</summary>
     private BarIntelligenceBlock? BarIntelligence() => BarIntelligenceBlock.From(Settings, _speed.Snapshot, _loc, _barThinking, _speed.Now);
@@ -911,11 +927,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         if (TrafficSettings.IsNetwork(Settings.Traffic.Bar))
         {
             UpdateTaskbar();
-            if (_tooltipShown)
-            {
-                _tooltip?.SetText(LiveLine(), LiveMoney() is { } money ? money.HoverLine : DisplayText.TodaySummary(_speed.Snapshot, _loc),
-                    TooltipTop());
-            }
+            RefreshTooltip();
         }
 
         UpdateTrafficDemand();
@@ -1072,8 +1084,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         _tooltipShown = true;
         _tooltip.Language = AppFonts.XmlLanguageFor(_loc.LanguageCode);
-        var summary = LiveMoney() is { } money ? money.HoverLine : DisplayText.TodaySummary(_speed.Snapshot, _loc);
-        _tooltip.ShowFor(bounds, LiveLine(), summary, _theme.ReduceMotion, _loc["taskbar.dragHint"], TooltipTop());
+        _tooltip.ShowFor(bounds, LiveLine(), TooltipSummary(), _theme.ReduceMotion, _loc["taskbar.dragHint"], TooltipTop(), BarQuota());
     }
 
     /// <summary>The user dragged the taskbar widget along the taskbar (DESIGN 3, Position on the taskbar).</summary>
