@@ -562,6 +562,8 @@ def claude_line(state, obj, dedupe):
         fast = usage.get("speed") == "fast"
         stop = message.get("stop_reason")
         resp = state.responses.get(key)
+        # A finished response's own snapshot appended again (METRICS 4.1, assistant step 6).
+        replay = resp is not None and resp["final"] and ts <= resp["endMs"]
         if resp is None:
             dedupe.claim(key, state.path)
             emit(state, key, state.pending, ts, tokens, message.get("model"), stop is not None, fast=fast, first=ts)
@@ -586,6 +588,8 @@ def claude_line(state, obj, dedupe):
             merged = modes.put(merged, fact)
         state.response_facts[key], state.latest_key = merged, key
         state.line_effort = recorded or state.line_effort
+        if replay:
+            return
         content = message.get("content") if isinstance(message.get("content"), list) else []
         has_tool_use = any(isinstance(b, dict) and b.get("type") == "tool_use" for b in content)
         if stop == "tool_use" or (stop is None and has_tool_use):

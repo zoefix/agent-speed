@@ -544,6 +544,44 @@ expect(rel, source="claudeCode", project="nova", model=None, isSubagent=False, p
        phase="generating", inFlightStartMs=None, lastLineMs=at(4, 31), malformedLines=0,
        responses=[], effort=None, speed=None, responseModes={})
 
+# --- Claude Code: an older snapshot of a finished message appended again (4.1 step 6, issue #79) -------------------
+# The replayed lines keep their original timestamps: they merge into msg_P but leave the phase as it was.
+rel = "claude/projects/-Users-dev-projects-nova/s-replay.jsonl"
+k = dict(session="s-replay")
+partial = assistant(at(4, 42), "msg_P", ["text"], cl_usage(3, 0, 4000, 10), None, **k)
+write_jsonl(rel, [
+    user(at(4, 40), "Write the notes", **k),
+    claude("api-request", at(4, 40, 50), id="api-P1", **k),
+    partial,
+    assistant(at(4, 44), "msg_P", ["text"], cl_usage(3, 0, 4000, 200), "end_turn", **k),
+    partial,
+])
+expect(rel, source="claudeCode", project="nova", model="claude-opus-5-5", isSubagent=False, parentFile=None,
+       phase="idle", inFlightStartMs=None, lastLineMs=at(4, 44), malformedLines=0,
+       responses=[resp("msg_P", at(4, 40, 50), at(4, 44), 4003, 4000, 0, 200, 0, "claude-opus-5-5",
+                       first=at(4, 42))])
+
+# After the next request has started, neither the message's last line (same timestamp) nor its older snapshot,
+# appended again, ends that request or moves its in-flight start back to msg_N's.
+rel = "claude/projects/-Users-dev-projects-nova/s-replay-next.jsonl"
+k = dict(session="s-replay-next")
+partial = assistant(at(4, 52), "msg_N", ["text"], cl_usage(3, 0, 4000, 10), None, **k)
+done = assistant(at(4, 54), "msg_N", ["text"], cl_usage(3, 0, 4000, 180), "end_turn", **k)
+write_jsonl(rel, [
+    user(at(4, 50), "Write the notes", **k),
+    claude("api-request", at(4, 50, 50), id="api-N1", **k),
+    partial,
+    done,
+    user(at(4, 58), "Now the changelog", **k),
+    claude("api-request", at(4, 58, 50), id="api-N2", **k),
+    done,
+    partial,
+])
+expect(rel, source="claudeCode", project="nova", model="claude-opus-5-5", isSubagent=False, parentFile=None,
+       phase="generating", inFlightStartMs=at(4, 58, 50), lastLineMs=at(4, 58, 50), malformedLines=0,
+       responses=[resp("msg_N", at(4, 50, 50), at(4, 54), 4003, 4000, 0, 180, 0, "claude-opus-5-5",
+                       first=at(4, 52))])
+
 
 # --- DeepSeek Harness (dsh): zstd frame streams ------------------------------
 
