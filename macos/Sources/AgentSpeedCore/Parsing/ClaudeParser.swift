@@ -175,7 +175,10 @@ struct ClaudeParser: Sendable {
         var lineModes = line.modes
         if let effort = ultracodeFact ?? line.effort { lineModes.insert(effort) }
         let record: ResponseRecord
+        var replay = false
         if claim == .sameFile, var existing = responses[key] {
+            // An earlier line of a finished message appended again keeps the phase (METRICS 4.1, assistant step 6).
+            replay = existing.isFinal && timestamp <= existing.endMs
             existing.endMs = max(existing.endMs, timestamp)
             existing.firstMs = min(existing.firstMs ?? timestamp, timestamp)
             existing.usage = existing.usage.merged(with: line.usage)
@@ -211,6 +214,8 @@ struct ClaudeParser: Sendable {
         state.actions.recordCalls(tools, at: timestamp, model: state.model)
 
         switch line.stopReason {
+        case _ where replay:
+            break
         case .toolUse:
             state.setPhase(.tools, at: timestamp)
         case .none where line.hasToolUse:

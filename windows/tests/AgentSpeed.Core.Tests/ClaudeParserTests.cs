@@ -112,6 +112,61 @@ public sealed class ClaudeParserTests
     }
 
     [Fact]
+    public void ReplayingAnOlderPartialDoesNotReopenAFinishedRequest()
+    {
+        // Issue #79: an older snapshot of the message appended again after its end_turn.
+        var parser = new ClaudeParser(AgentA, new Deduper());
+        var sink = new RecordingSink();
+        var partial = Assistant(T0 + 1000, "msg_same", 10, "null");
+
+        Feed.Lines(parser, sink, ApiRequest(T0), partial, Assistant(T0 + 2000, "msg_same", 200, "\"end_turn\""));
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+        var idleSince = parser.PhaseSinceMs;
+
+        Feed.Lines(parser, sink, partial);
+        var response = Assert.Single(sink.Latest);
+        Assert.True(response.Final);
+        Assert.Equal(200, response.Tokens.Output);
+        Assert.Equal(T0 + 2000, response.EndMs);
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+        Assert.Null(parser.InFlightStartMs);
+        Assert.Equal(idleSince, parser.PhaseSinceMs);
+    }
+
+    [Fact]
+    public void ReplayAfterTheNextRequestKeepsItsInFlightStart()
+    {
+        var parser = new ClaudeParser(AgentA, new Deduper());
+        var sink = new RecordingSink();
+        var partial = Assistant(T0 + 1000, "msg_1", 10, "null");
+        var done = Assistant(T0 + 2000, "msg_1", 200);
+
+        Feed.Lines(parser, sink, ApiRequest(T0), partial, done, UserText(T0 + 5000, "next"), ApiRequest(T0 + 5100), done, partial);
+        Assert.Equal(AgentPhase.Generating, parser.Phase);
+        Assert.Equal(T0 + 5100, parser.InFlightStartMs);
+
+        Feed.Lines(parser, sink, Assistant(T0 + 6000, "msg_2", 20));
+        Assert.Equal(T0 + 5100, sink.Latest[1].StartMs);
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+    }
+
+    [Fact]
+    public void LinesBeforeTheFirstStopReasonAndLaterLinesAreNoReplays()
+    {
+        var parser = new ClaudeParser(AgentA, new Deduper());
+        var sink = new RecordingSink();
+
+        // A message's lines can be out of order; the first one with a stop reason still sets the phase.
+        Feed.Lines(parser, sink, ApiRequest(T0), Assistant(T0 + 2000, "msg_1", 10, "null"),
+            Assistant(T0 + 1500, "msg_1", 30, "\"tool_use\""));
+        Assert.Equal(AgentPhase.Tools, parser.Phase);
+
+        Feed.Lines(parser, sink, Assistant(T0 + 2500, "msg_1", 30, "null"));
+        Assert.Equal(AgentPhase.Generating, parser.Phase);
+        Assert.Equal(T0, parser.InFlightStartMs);
+    }
+
+    [Fact]
     public void UserLineAfterApiRequestKeepsThePreciseStart()
     {
         var parser = new ClaudeParser(AgentA, new Deduper());

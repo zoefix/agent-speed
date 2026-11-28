@@ -12,6 +12,8 @@
     "claude/projects/-Users-dev-projects-orbit/s-desk/subagents/agent-wf1.jsonl",
     "claude/projects/-Users-dev-projects-nova/s-limit.jsonl",
     "claude/projects/-Users-dev-projects-nova/s-retry.jsonl",
+    "claude/projects/-Users-dev-projects-nova/s-replay.jsonl",
+    "claude/projects/-Users-dev-projects-nova/s-replay-next.jsonl",
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd",
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd",
     "claude/projects/-Users-dev-projects-vega/s-vega.jsonl",
@@ -708,6 +710,80 @@
       "effort": null,
       "speed": null,
       "responseModes": {}
+    },
+    "claude/projects/-Users-dev-projects-nova/s-replay.jsonl": {
+      "source": "claudeCode",
+      "project": "nova",
+      "model": "claude-opus-5-5",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792490684000,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "msg_P",
+          "startMs": 1792490680050,
+          "endMs": 1792490684000,
+          "firstMs": 1792490682000,
+          "input": 4003,
+          "cachedInput": 4000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 200,
+          "reasoning": 0,
+          "model": "claude-opus-5-5",
+          "provider": null,
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "msg_P": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "claude/projects/-Users-dev-projects-nova/s-replay-next.jsonl": {
+      "source": "claudeCode",
+      "project": "nova",
+      "model": "claude-opus-5-5",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "generating",
+      "inFlightStartMs": 1792490698050,
+      "lastLineMs": 1792490698050,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "msg_N",
+          "startMs": 1792490690050,
+          "endMs": 1792490694000,
+          "firstMs": 1792490692000,
+          "input": 4003,
+          "cachedInput": 4000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 180,
+          "reasoning": 0,
+          "model": "claude-opus-5-5",
+          "provider": null,
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "msg_N": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": {
       "source": "deepseek",
@@ -4764,8 +4840,10 @@
     "claude/projects/-Users-dev-projects-orbit/s-desk/subagents/agent-wf1.jsonl": 1792490587000,
     "claude/projects/-Users-dev-projects-nova/s-limit.jsonl": 1792490661000,
     "claude/projects/-Users-dev-projects-nova/s-retry.jsonl": 1792490672000,
-    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": 1792490673000,
-    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd": 1792490674000,
+    "claude/projects/-Users-dev-projects-nova/s-replay.jsonl": 1792490685000,
+    "claude/projects/-Users-dev-projects-nova/s-replay-next.jsonl": 1792490700000,
+    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": 1792490701000,
+    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd": 1792490702000,
     "claude/projects/-Users-dev-projects-vega/s-vega.jsonl": 1792490786000,
     "claude/projects/-Users-dev-projects-vega/s-fork.jsonl": 1792490826000,
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-08-00-tools.jsonl": 1792490899000,

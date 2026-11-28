@@ -105,6 +105,54 @@ struct ParserBehaviorTests {
         #expect(idle.state.phase == .idle)
     }
 
+    @Test func claudeReplayedOlderSnapshotDoesNotReopenAFinishedRequest() {
+        // Issue #79: an older snapshot of the message appended again after its end_turn.
+        var deduper = Deduper()
+        let request = #"{"type":"api-request","entrypoint":"cli","cwd":"/w/p","timestamp":"2026-10-20T10:00:00Z"}"#
+        let partial = Self.claudeAssistant("2026-10-20T10:00:01Z", id: "same", output: 10)
+        let (parser, upserts) = Self.run(.claude, [
+            request, partial,
+            Self.claudeAssistant("2026-10-20T10:00:02Z", id: "same", output: 200, stop: #""end_turn""#),
+            partial,
+        ], deduper: &deduper)
+        #expect(upserts.count == 3)
+        #expect(upserts.last?.record.isFinal == true)
+        #expect(upserts.last?.record.usage.output == 200)
+        #expect(upserts.last?.record.endMs == 1_792_490_402_000)
+        #expect(parser.state.phase == .idle)
+        #expect(parser.state.inFlightStartMs == nil)
+        #expect(parser.state.phaseSinceMs == 1_792_490_402_000)
+    }
+
+    @Test func claudeReplayAfterTheNextRequestKeepsItsInFlightStart() {
+        var deduper = Deduper()
+        let partial = Self.claudeAssistant("2026-10-20T10:00:01Z", id: "m1", output: 10)
+        let done = Self.claudeAssistant("2026-10-20T10:00:02Z", id: "m1", output: 200, stop: #""end_turn""#)
+        let (parser, _) = Self.run(.claude, [
+            Self.claudeUser("2026-10-20T10:00:00Z", content: #""go""#), partial, done,
+            Self.claudeUser("2026-10-20T10:00:05Z", content: #""next""#), done, partial,
+        ], deduper: &deduper)
+        #expect(parser.state.phase == .generating)
+        #expect(parser.state.inFlightStartMs == 1_792_490_405_000)
+    }
+
+    @Test func claudeLinesBeforeTheFirstStopReasonAndLaterLinesAreNoReplays() {
+        // A message's lines can be out of order; the first one with a stop reason still sets the phase.
+        let lines = [
+            Self.claudeUser("2026-10-20T10:00:00Z", content: #""go""#),
+            Self.claudeAssistant("2026-10-20T10:00:02Z", id: "m1", output: 10),
+            Self.claudeAssistant("2026-10-20T10:00:01.500Z", id: "m1", output: 30, stop: #""tool_use""#),
+        ]
+        var deduper = Deduper()
+        let (tools, _) = Self.run(.claude, lines, deduper: &deduper)
+        #expect(tools.state.phase == .tools)
+        var other = Deduper()
+        let later = lines + [Self.claudeAssistant("2026-10-20T10:00:03Z", id: "m1", output: 30)]
+        let (generating, _) = Self.run(.claude, later, deduper: &other)
+        #expect(generating.state.phase == .generating)
+        #expect(generating.state.inFlightStartMs == 1_792_490_400_000)
+    }
+
     @Test func claudeMergesRepeatedLinesAndMarksOnlyTheFirstAsCompletion() {
         var deduper = Deduper()
         let (parser, upserts) = Self.run(.claude, [

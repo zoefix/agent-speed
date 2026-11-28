@@ -298,6 +298,12 @@ Assistant line:
 6. Phase from `message.stop_reason`: `"tool_use"` → `tools`; `null`/missing → `tools` when the line's
    `message.content` contains a block of type `tool_use`, otherwise `generating`; `"pause_turn"` → `generating`
    (`inFlightStartMs` = the response start, or `ts` if unknown); any other value → `idle`.
+   Skipped for a replay: a line whose response was already final before it (step 5) and whose `ts` is not later than
+   that response's `endMs` before step 4. Claude Code can append an earlier line of a finished message again, with
+   its original timestamp (issue #79: an older snapshot with `stop_reason` null after the message's `end_turn`). A
+   replay merges as above but changes neither the phase nor `inFlightStartMs`, also when the next request has
+   already started. A message's lines before its first `stop_reason` (its other content blocks, such as parallel tool
+   calls) and lines with a later timestamp are no replays.
 
 ### 4.2 Codex
 
@@ -2297,6 +2303,8 @@ analysis of Qoder CLI 1.1.86 and two signed-in runs); fixtures: `spec/tools/qode
   for its own models (research run: 20 341 input with 20 096 cached), so `input = input_tokens` when
   `input_tokens ≥ cache_read_input_tokens + cache_creation_input_tokens`, else Claude's sum (a custom Anthropic
   provider's own accounting). `firstMs` null (each call is one line, written when it ends); `fast` false.
+- **Replays**: step 6 always applies. The replay rule of 4.1 step 6 is Claude Code's: no Qoder CLI line was seen
+  appended again, and a line without usage leaves no response to compare with.
 - **Model**: `message.model`: the tier (`auto`, …; price table `unknown`, 9.2) or the custom model id.
 - **Effort**: none (EXECUTION-MODES); `runtime-config.reasoningEffort` was null in every run and is not read.
 - **Actions** (6.10): none. The lines carry `tool_use` and `tool_result` blocks, but Qoder's tool names were not

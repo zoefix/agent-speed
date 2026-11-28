@@ -294,6 +294,7 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
     const std::string& key = *line.key;
     ParsedResponse response;
     bool isCompletion = false;
+    bool replay = false;
     std::string owner;
     const auto recorded = native::effort(line.recordedEffort(), ModeEvidence::Recorded, ModeScope::Request);
     const ExecutionModes lineModes =
@@ -322,6 +323,8 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
         return;
     } else if (auto it = recent_.find(key); it != recent_.end()) {
         response = it->second;
+        // An earlier line of a finished message appended again keeps the phase (METRICS 4.1, assistant step 6).
+        replay = response.final && ts <= response.endMs;
         response.endMs = std::max(response.endMs, ts);
         response.firstMs = std::min(response.firstMs.value_or(ts), ts);
         response.tokens = TokenCounts::max(response.tokens, line.usage);
@@ -338,6 +341,7 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
     if (recorded) lineEffort_ = recorded;
     refreshModes();
     sink.onResponse(response, isCompletion);
+    if (replay) return;
 
     switch (line.stopReason) {
         case StopReason::ToolUse:
