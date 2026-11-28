@@ -171,6 +171,7 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
 
         ParsedResponse response;
         bool isCompletion;
+        var replay = false;
         var recorded = ExecutionModeNative.Effort(line.RecordedEffort, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request);
         var lineModes = ExecutionModes.Of(IsUltracode ? Ultracode : recorded).Merge(ExecutionModeNative.ClaudeSpeed(line.Speed));
         if (Deduper.TryClaim(key, AgentId, out var owner))
@@ -184,6 +185,8 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
         }
         else if (_recent.TryGetValue(key, out var previous))
         {
+            // An earlier line of a finished message appended again keeps the phase (METRICS 4.1, assistant step 6).
+            replay = previous.Final && ts <= previous.EndMs;
             response = previous with
             {
                 EndMs = Math.Max(previous.EndMs, ts),
@@ -210,6 +213,10 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
         _lineEffort = recorded ?? _lineEffort;
         RefreshModes();
         sink.OnResponse(response, isCompletion);
+        if (replay)
+        {
+            return;
+        }
 
         switch (line.StopReason)
         {
