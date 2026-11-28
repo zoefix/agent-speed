@@ -53,14 +53,23 @@ export EXTRA_QT_MODULES="svg"
 export LINUXDEPLOY_OUTPUT_VERSION="$version"
 export PATH="$tools:$PATH"
 ln -sf "$tools/linuxdeploy-plugin-qt-$arch.AppImage" "$tools/linuxdeploy-plugin-qt"
+# OpenSSL stays the system's (issue #80): Qt's TLS backend loads libssl.so.3 at run time, which is never bundled, and a
+# bundled libcrypto.so.3 from the build machine (3.0) paired with a newer system libssl (3.2 and later: Ubuntu 26.04,
+# Debian 13, Fedora 42) fails to load, so every HTTPS request failed. The system's pair also gets its security updates.
 (
     cd "$work"
     "$tools/linuxdeploy-$arch.AppImage" --appdir "$appdir" \
         --executable "$appdir/usr/bin/agent-speed" \
         --desktop-file "$appdir/usr/share/applications/agent-speed.desktop" \
         --icon-file "$appdir/usr/share/icons/hicolor/scalable/apps/agent-speed.svg" \
+        --exclude-library 'libcrypto.so*' --exclude-library 'libssl.so*' \
         --plugin qt --output appimage >"$work/linuxdeploy.log" 2>&1 || { tail -40 "$work/linuxdeploy.log"; exit 1; }
 )
+bundled_ssl=$(find "$appdir" \( -name 'libcrypto.so*' -o -name 'libssl.so*' \) -print)
+if [[ -n "$bundled_ssl" ]]; then
+    echo "OpenSSL must come from the system, but the bundle holds: $bundled_ssl" >&2
+    exit 1
+fi
 appimage="$out/AgentSpeed-Linux-$arch.AppImage"
 mv "$work"/Agent*Speed*.AppImage "$appimage"
 chmod +x "$appimage"
@@ -74,7 +83,8 @@ ln -s /opt/agent-speed/bin/agent-speed "$deb/usr/bin/agent-speed"
 cp "$repo/linux/app/packaging/agent-speed.desktop" "$deb/usr/share/applications/"
 cp "$repo/linux/app/packaging/agent-speed.svg" "$deb/usr/share/icons/hicolor/scalable/apps/"
 size=$(du -sk "$deb" | cut -f1)
-# The binaries need at most the build machine's C and C++ runtimes (arm64 builds on a newer Ubuntu, whose Qt needs them).
+# The binaries need at most the build machine's C and C++ runtimes (arm64 builds on a newer Ubuntu, whose Qt needs them)
+# and the system's OpenSSL 3 (libssl3t64 since Ubuntu 24.04 and Debian 13).
 glibc=$(getconf GNU_LIBC_VERSION | awk '{ print $2 }')
 cxx=$(dpkg-query -W -f='${Version}' libstdc++6 | sed -E 's/^([0-9]+).*/\1/')
 cat >"$deb/DEBIAN/control" <<CONTROL
@@ -84,7 +94,7 @@ Section: utils
 Priority: optional
 Architecture: $debarch
 Installed-Size: $size
-Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3, zlib1g
+Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libssl3t64 | libssl3, libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3, zlib1g
 Recommends: openssh-client
 Maintainer: zoefix <277453498+zoefix@users.noreply.github.com>
 Homepage: https://github.com/zoefix/agent-speed
