@@ -92,6 +92,9 @@ internal sealed class QuotaService : IDisposable
     private long _vendorRoundMs = long.MinValue;
     private volatile bool _resetDesktop;
     private volatile bool _cardDemand;
+
+    /// <summary>The taskbar 額度 block's source (DESIGN 10), or none: it asks as if the dashboard were open (QUOTAS 9.1).</summary>
+    private volatile IReadOnlySet<SourceKind> _barShown = ImmutableHashSet<SourceKind>.Empty;
     private long _bridgeCheckedMs = long.MinValue;
     private long _listedMs = long.MinValue;
     private volatile bool _helperEnsured;
@@ -294,6 +297,29 @@ internal sealed class QuotaService : IDisposable
         Poke();
     }
 
+    /// <summary>
+    /// The taskbar shows the 額度 block for <paramref name="source"/> (null: off, glyph only or the widget hidden): the running apps
+    /// are listed every 15 s as for the card (QUOTAS 6), and the source's vendor route asks as if the dashboard were open
+    /// (QUOTAS 9.1, 9.4; issue #81).
+    /// </summary>
+    public void SetBarSource(SourceKind? source)
+    {
+        var shown = _barShown;
+        if (source is { } s ? shown.Count == 1 && shown.Contains(s) : shown.Count == 0)
+        {
+            return;
+        }
+
+        _barShown = source is { } chosen ? ImmutableHashSet.Create(chosen) : ImmutableHashSet<SourceKind>.Empty;
+        _listedMs = long.MinValue;
+        if (source is not null)
+        {
+            _vendorNow = true;
+        }
+
+        Poke();
+    }
+
     /// <summary>Settings opened: the bridge's status is checked again now, and the local files are read again.</summary>
     public void RefreshBridgeStatus()
     {
@@ -386,7 +412,7 @@ internal sealed class QuotaService : IDisposable
         var settings = inputs.Quota;
         var shown = inputs.Shown;
         var routes = inputs.Routes;
-        var listing = _cardDemand || (shown.Contains(SourceKind.ClaudeDesktop) && now - Interlocked.Read(ref _listedMs) >= DesktopListingMs)
+        var listing = _cardDemand || _barShown.Count > 0 || (shown.Contains(SourceKind.ClaudeDesktop) && now - Interlocked.Read(ref _listedMs) >= DesktopListingMs)
             || (routes.Count > 0 && now - Interlocked.Read(ref _listedMs) >= QuotaPresence.ListIntervalMs);
         if (_presence is { } presence && listing)
         {
@@ -611,7 +637,7 @@ internal sealed class QuotaService : IDisposable
         Interlocked.Exchange(ref _vendorRoundMs, now);
         _vendorInFlight = true;
         var round = new QuotaVendorRound(now, inputs.Network, inputs.Routes, _presence?.Running ?? new HashSet<SourceKind>(), _dashboardOpen,
-            inputs.Quota.ZcodeRegion, _readLocalNow);
+            inputs.Quota.ZcodeRegion, _readLocalNow, _barShown);
         _readLocalNow = false;
         _ = Task.Run(async () =>
         {

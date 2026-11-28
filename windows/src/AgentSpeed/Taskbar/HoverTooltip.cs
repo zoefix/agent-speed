@@ -6,6 +6,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Documents;
 using System.Windows.Media.Effects;
 using AgentSpeed.Interop;
+using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Theme;
 
 namespace AgentSpeed.Taskbar;
@@ -18,6 +19,8 @@ internal sealed class HoverTooltip : Window
     private readonly TextBlock _primary;
     private readonly TextBlock _detail;
     private readonly TextBlock _secondary;
+    private readonly TextBlock _quotaHeader;
+    private readonly TextBlock _quotaLines;
     private readonly TextBlock _hint;
     private RECT _anchor;
     private bool _reduceMotion;
@@ -53,6 +56,16 @@ internal sealed class HoverTooltip : Window
         Typography.SetNumeralAlignment(_primary, FontNumeralAlignment.Tabular);
         Typography.SetNumeralAlignment(_secondary, FontNumeralAlignment.Tabular);
 
+        // DESIGN 10, Quota: the 額度 block's source in the text color, then its windows and its route's status, 6 DIP below.
+        _quotaHeader = new TextBlock { FontSize = 12, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+        _quotaHeader.SetResourceReference(TextBlock.ForegroundProperty, "ToolTipForegroundBrush");
+        _quotaHeader.SetResourceReference(TextBlock.FontFamilyProperty, AppFonts.UiFontKey);
+        _quotaLines = new TextBlock { FontSize = 12, Margin = new Thickness(0, 2, 0, 0), Visibility = Visibility.Collapsed };
+        _quotaLines.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        _quotaLines.SetResourceReference(TextBlock.FontFamilyProperty, AppFonts.UiFontKey);
+        Typography.SetNumeralAlignment(_quotaHeader, FontNumeralAlignment.Tabular);
+        Typography.SetNumeralAlignment(_quotaLines, FontNumeralAlignment.Tabular);
+
         // DESIGN 3, Position on the taskbar: the widget can be dragged along the taskbar. Secondary color: tertiary text
         // falls below 4.5:1 on the light tooltip (DESIGN 7).
         _hint = new TextBlock { FontSize = 12, Margin = new Thickness(0, 6, 0, 0) };
@@ -63,6 +76,8 @@ internal sealed class HoverTooltip : Window
         stack.Children.Add(_primary);
         stack.Children.Add(_detail);
         stack.Children.Add(_secondary);
+        stack.Children.Add(_quotaHeader);
+        stack.Children.Add(_quotaLines);
         stack.Children.Add(_hint);
 
         var border = new Border
@@ -85,11 +100,13 @@ internal sealed class HoverTooltip : Window
 
     /// <param name="hint">An optional last line, set apart from the others (the taskbar widget's drag hint).</param>
     /// <param name="detail">An optional line right under the first (the intelligence block's supplying agent).</param>
-    public void ShowFor(RECT anchor, string primary, string secondary, bool reduceMotion, string? hint = null, string? detail = null)
+    /// <param name="quota">The 額度 block, whose header and lines follow the lines above; null without the block.</param>
+    public void ShowFor(RECT anchor, string primary, string secondary, bool reduceMotion, string? hint = null, string? detail = null,
+        BarQuotaBlock? quota = null)
     {
         _anchor = anchor;
         _reduceMotion = reduceMotion;
-        SetText(primary, secondary, detail);
+        SetText(primary, secondary, detail, quota);
         _hint.Text = hint;
         _hint.Visibility = string.IsNullOrEmpty(hint) ? Visibility.Collapsed : Visibility.Visible;
         if (!IsVisible)
@@ -102,13 +119,18 @@ internal sealed class HoverTooltip : Window
         BeginAnimation(OpacityProperty, new DoubleAnimation(1, reduceMotion ? TimeSpan.Zero : TimeSpan.FromMilliseconds(140)));
     }
 
-    public void SetText(string primary, string secondary, string? detail = null)
+    public void SetText(string primary, string secondary, string? detail = null, BarQuotaBlock? quota = null)
     {
         _primary.Text = primary;
         _detail.Text = detail;
         _detail.Visibility = string.IsNullOrEmpty(detail) ? Visibility.Collapsed : Visibility.Visible;
         _secondary.Text = secondary;
         _secondary.Visibility = string.IsNullOrEmpty(secondary) ? Visibility.Collapsed : Visibility.Visible;
+        var lines = quota is null ? string.Empty : string.Join("\n", quota.TooltipLines);
+        _quotaHeader.Text = quota?.TooltipHeader;
+        _quotaHeader.Visibility = quota is null ? Visibility.Collapsed : Visibility.Visible;
+        _quotaLines.Text = lines;
+        _quotaLines.Visibility = lines.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public void HideTip()

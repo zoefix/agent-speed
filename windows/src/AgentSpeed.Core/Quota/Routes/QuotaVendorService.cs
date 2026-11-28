@@ -225,9 +225,9 @@ public sealed partial class QuotaVendorService
         }
     }
 
-    /// <summary>The agent runs, or the dashboard is open (or an Antigravity server was seen).</summary>
+    /// <summary>The agent runs, the dashboard is open or the quota block shows the source (or an Antigravity server was seen).</summary>
     private bool Asks(QuotaRoute route, QuotaVendorRound round) =>
-        round.DashboardOpen || route.Agents().Any(round.Running.Contains) || (route == QuotaRoute.Antigravity && _antigravityRuns);
+        round.AsksAsOpen(route) || route.Agents().Any(round.Running.Contains) || (route == QuotaRoute.Antigravity && _antigravityRuns);
 
     /// <summary>Whether a request may go out now for <paramref name="credential"/>; otherwise the status says why not.</summary>
     private bool Gate(QuotaRoute route, QuotaVendorRound round, QuotaFingerprint credential, RouteState state, string? site = null)

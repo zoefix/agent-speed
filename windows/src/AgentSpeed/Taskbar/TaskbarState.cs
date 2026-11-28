@@ -27,6 +27,7 @@ internal sealed record TaskbarState(
     BarSecondary? Secondary = null,
     BarTrafficBlock? Traffic = null,
     BarIntelligenceBlock? Intelligence = null,
+    BarQuotaBlock? Quota = null,
     double Offset = 0)
 {
     public static TaskbarState Initial { get; } = new(
@@ -39,7 +40,8 @@ internal sealed record TaskbarState(
         || (Secondary is null) != (other.Secondary is null) || Secondary?.Live.Unit != other.Secondary?.Live.Unit
         || Secondary?.Today.Unit != other.Secondary?.Today.Unit || Secondary?.Live.Label != other.Secondary?.Live.Label
         || (Traffic is null) != (other.Traffic is null) || Traffic?.Bits != other.Traffic?.Bits
-        || (Intelligence is null) != (other.Intelligence is null) || Intelligence?.LanguageCode != other.Intelligence?.LanguageCode;
+        || (Intelligence is null) != (other.Intelligence is null) || Intelligence?.LanguageCode != other.Intelligence?.LanguageCode
+        || (Quota is null) != (other.Quota is null) || Quota?.LanguageCode != other.Quota?.LanguageCode;
 }
 
 internal enum TaskbarPresence

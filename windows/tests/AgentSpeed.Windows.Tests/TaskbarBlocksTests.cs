@@ -9,8 +9,8 @@ using AgentSpeed.Taskbar;
 namespace AgentSpeed.Windows.Tests;
 
 /// <summary>
-/// The taskbar widget with its readout blocks (DESIGN 10, Menu bar and taskbar): the network block and the intelligence
-/// block each add their fixed width, alone or together, and the widget never changes width with their values.
+/// The taskbar widget with its readout blocks (DESIGN 10, Menu bar and taskbar): the network block, the intelligence block and
+/// the quota block each add their width, alone or together, and the widget never changes width with their values.
 /// </summary>
 public class TaskbarBlocksTests
 {
@@ -53,6 +53,46 @@ public class TaskbarBlocksTests
         Assert.True(network > plain && intelligence > plain);
         Assert.InRange(both - plain, network - plain + intelligence - plain - 1, network - plain + intelligence - plain + 1);
         Assert.All(others, length => Assert.Equal(both, length));
+    }
+
+    private static BarQuotaBlock Quota(params BarQuotaLine[] lines) => new(Core.SourceKind.Codex, BarQuotaForm.Windows, lines, "Codex") { LanguageCode = LanguageCodes.ZhHant };
+
+    /// <summary>
+    /// DESIGN 10, Quota: the 額度 block adds its width after the 性能 block; any percent up to <c>100%</c> fits its number cell, and
+    /// a held cell keeps the widget as wide while a narrower text waits out the governor's delay.
+    /// </summary>
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void TheQuotaBlockAddsItsWidthAndNeverMovesWithItsPercents(double scale)
+    {
+        var (plain, quota, all, others, wider, held) = OnStaThread(() =>
+        {
+            var renderer = new TaskbarRenderer();
+            int Length(TaskbarState state) => renderer.MeasureLength(state, scale, vertical: false);
+            var usual = Quota(new BarQuotaLine("5h", "68%"), new BarQuotaLine("7d", "42%"));
+            var variants = new[]
+            {
+                Length(Widget(null, null) with { Quota = Quota(new BarQuotaLine("5h", "0%"), new BarQuotaLine("7d", "100%", Critical: true)) }),
+                Length(Widget(null, null) with { Quota = Quota(new BarQuotaLine("5h", "9%", Pale: true)) }),
+                Length(Widget(null, null) with { Quota = Quota(new BarQuotaLine("7d", "100%"), new BarQuotaLine("5h", "5%")) }),
+            };
+            var withQuota = Widget(null, null) with { Quota = usual };
+            var wide = Widget(null, null) with { Quota = Quota(new BarQuotaLine("Fable 7d", "100%", Estimated: true), new BarQuotaLine("5h", "68%")) };
+            var needed = renderer.QuotaCellsNeeded(wide, scale);
+            renderer.QuotaCells = needed;
+            var keptWide = Length(withQuota);
+            renderer.QuotaCells = default;
+            return (Length(Widget(null, null)), Length(withQuota), Length(Widget(Network("1.28", "64.0"), Score(1286, 128)) with { Quota = usual }),
+                variants, Length(wide), keptWide);
+        });
+
+        Assert.True(quota > plain);
+        Assert.All(others, length => Assert.Equal(quota, length));
+        Assert.True(all > quota);
+        Assert.True(wider > quota);
+        Assert.Equal(wider, held);
     }
 
     private static T OnStaThread<T>(Func<T> work)

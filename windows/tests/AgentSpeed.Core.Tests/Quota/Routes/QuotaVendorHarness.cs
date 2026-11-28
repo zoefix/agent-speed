@@ -140,8 +140,8 @@ internal sealed class QuotaVendorHarness : IDisposable
     public static IReadOnlySet<SourceKind> Everything => Enum.GetValues<SourceKind>().ToHashSet();
 
     public Task<QuotaVendorReadings> RoundAsync(IReadOnlySet<QuotaRoute> routes, IReadOnlySet<SourceKind>? running = null, bool network = true,
-        bool dashboard = false, ZaiRegion region = ZaiRegion.Global, bool local = false) =>
-        Service.RefreshAsync(new QuotaVendorRound(Now, network, routes, running ?? Everything, dashboard, region, local));
+        bool dashboard = false, ZaiRegion region = ZaiRegion.Global, bool local = false, IReadOnlySet<SourceKind>? shown = null) =>
+        Service.RefreshAsync(new QuotaVendorRound(Now, network, routes, running ?? Everything, dashboard, region, local, shown));
 
     public void Dispose()
     {

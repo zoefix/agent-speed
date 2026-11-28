@@ -175,11 +175,15 @@ internal sealed class SettingsViewModel : ObservableObject
         }
 
         SourcesPane = new Sources.SourcesPaneViewModel(settings, localizer, pickFolder, Sources);
+        BarQuota = new BarQuotaViewModel(settings, localizer);
         Relocalize(localizer);
         Sync();
     }
 
     public ObservableCollection<NavItem> Pages { get; } = new();
+
+    /// <summary>選單列 / 工作列's 額度 controls (DESIGN 10): the source popup and the percent segments.</summary>
+    public BarQuotaViewModel BarQuota { get; }
 
     /// <summary>Settings → 資料來源: the location list of every source (DESIGN 5, METRICS 2.1).</summary>
     public Sources.SourcesPaneViewModel SourcesPane { get; }
@@ -607,6 +611,7 @@ internal sealed class SettingsViewModel : ObservableObject
 
         RefreshTitleLadder();
         SourcesPane?.Relocalize(localizer);
+        BarQuota?.Relocalize(localizer);
         Orbs?.Relocalize(localizer);
         Boards?.Relocalize(localizer);
         TitleThemes?.Relocalize(localizer);

@@ -6,6 +6,7 @@ using AgentSpeed.Controls;
 using AgentSpeed.Core;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Cost;
+using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Settings;
 
@@ -31,6 +32,7 @@ internal sealed class TaskbarRenderer
     private readonly TaskbarSecondaryText _secondary = new();
     private readonly TaskbarTrafficText _traffic = new();
     private readonly TaskbarIntelligenceText _intelligence = new();
+    private readonly TaskbarQuotaText _quota = new();
     private RenderTargetBitmap? _bitmap;
     private double _cacheScale = -1;
     private Color _cachePrimary;
@@ -63,11 +65,31 @@ internal sealed class TaskbarRenderer
         return _secondary.NumberWidth(state.Secondary!, scale, colors.Primary, colors.Secondary);
     }
 
+    /// <summary>
+    /// The quota block's label and number cells (DIP) the host's governor holds (each grows at once, narrows after its delay;
+    /// DESIGN 10, Menu bar and taskbar, <i>Quota</i>).
+    /// </summary>
+    public BarQuotaCells QuotaCells { get; set; }
+
+    /// <summary>The quota block's cells (DIP) its texts need now, for the host's governor; zero without the block.</summary>
+    public BarQuotaCells QuotaCellsNeeded(TaskbarState state, double scale)
+    {
+        if (!ShowsQuota(state))
+        {
+            return default;
+        }
+
+        var colors = Palette(state);
+        return _quota.Needed(state.Quota!, scale, colors.Primary, colors.Secondary, state.HighContrast, state.TaskbarDark);
+    }
+
     private static bool ShowsSecondary(TaskbarState state) => state.Secondary is not null && state.Mode != BarDisplayMode.GlyphOnly;
 
     private static bool ShowsTraffic(TaskbarState state) => state.Traffic is not null && state.Mode != BarDisplayMode.GlyphOnly;
 
     private static bool ShowsIntelligence(TaskbarState state) => state.Intelligence is not null && state.Mode != BarDisplayMode.GlyphOnly;
+
+    private static bool ShowsQuota(TaskbarState state) => state.Quota is not null && state.Mode != BarDisplayMode.GlyphOnly;
 
     /// <summary>Widget length along the taskbar in physical pixels: the content width.</summary>
     public int MeasureLength(TaskbarState state, double scale, bool vertical)
@@ -79,7 +101,7 @@ internal sealed class TaskbarRenderer
             var lines = state.Mode == BarDisplayMode.GlyphAndValue ? 2 : 1;
             var height = Padding + lines * 20 + (state.ShowUnit && state.Mode != BarDisplayMode.GlyphOnly ? 14 : 0)
                 + (ShowsSecondary(state) ? TaskbarSecondaryText.Height : 0) + (ShowsTraffic(state) ? TaskbarTrafficText.Height : 0)
-                + (ShowsIntelligence(state) ? TaskbarIntelligenceText.Height : 0) + Padding;
+                + (ShowsIntelligence(state) ? TaskbarIntelligenceText.Height : 0) + (ShowsQuota(state) ? TaskbarQuotaText.Height : 0) + Padding;
             return (int)Math.Ceiling(height * scale);
         }
 
@@ -127,6 +149,12 @@ internal sealed class TaskbarRenderer
             {
                 var colors = Palette(state);
                 width += _intelligence.Width(state.Intelligence!, _cacheScale, colors.Primary, colors.Secondary, state.HighContrast);
+            }
+
+            if (ShowsQuota(state))
+            {
+                var colors = Palette(state);
+                width += _quota.Width(state.Quota!, QuotaCells, _cacheScale, colors.Primary, colors.Secondary, state.HighContrast, state.TaskbarDark);
             }
         }
 
@@ -222,7 +250,7 @@ internal sealed class TaskbarRenderer
             x += _secondary.Width(state.Secondary!, SecondaryCell, scale, colors.Primary, colors.Secondary);
         }
 
-        // DESIGN 10: the network block, then the intelligence block, each with its own 8 px gap and fixed width.
+        // DESIGN 10: the network block, the intelligence block, then the quota block, each with its own 8 px gap and width.
         if (ShowsTraffic(state))
         {
             _traffic.Draw(dc, state.Traffic!, x, centerY, scale, colors.Primary, colors.Secondary);
@@ -232,6 +260,12 @@ internal sealed class TaskbarRenderer
         if (ShowsIntelligence(state))
         {
             _intelligence.Draw(dc, state.Intelligence!, x, centerY, scale, colors.Primary, colors.Secondary, state.HighContrast);
+            x += _intelligence.Width(state.Intelligence!, scale, colors.Primary, colors.Secondary, state.HighContrast);
+        }
+
+        if (ShowsQuota(state))
+        {
+            _quota.Draw(dc, state.Quota!, x, centerY, QuotaCells, scale, colors.Primary, colors.Secondary, state.HighContrast, state.TaskbarDark);
         }
     }
 
@@ -285,6 +319,15 @@ internal sealed class TaskbarRenderer
             var blockWidth = _intelligence.Width(state.Intelligence!, 1, colors.Primary, colors.Secondary, state.HighContrast) - TaskbarIntelligenceText.Gap;
             _intelligence.Draw(dc, state.Intelligence!, (width - blockWidth) / 2 - TaskbarIntelligenceText.Gap,
                 y + TaskbarIntelligenceText.Height / 2, 1, colors.Primary, colors.Secondary, state.HighContrast);
+            y += TaskbarIntelligenceText.Height;
+        }
+
+        if (ShowsQuota(state))
+        {
+            var blockWidth = _quota.Width(state.Quota!, QuotaCells, 1, colors.Primary, colors.Secondary, state.HighContrast, state.TaskbarDark)
+                - TaskbarQuotaText.Gap;
+            _quota.Draw(dc, state.Quota!, (width - blockWidth) / 2 - TaskbarQuotaText.Gap, y + TaskbarQuotaText.Height / 2, QuotaCells, 1,
+                colors.Primary, colors.Secondary, state.HighContrast, state.TaskbarDark);
         }
     }
 

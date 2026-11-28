@@ -188,10 +188,11 @@ public sealed partial class QuotaVendorService
     }
 
     /// <summary>
-    /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open), the
-    /// network is on and the last round is old enough. While a user's agy runs or the dashboard is open and an agy binary
-    /// is there, a round whose servers give no windows runs agy's own usage report, whose outcome is the round's (QUOTAS
-    /// 9.4): a refusal of the servers then stops nothing. Without a binary the route is what it was without the report.
+    /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open, or the quota
+    /// block shows Antigravity), the network is on and the last round is old enough. While a user's agy runs or the
+    /// dashboard is open (or the quota block shows Antigravity) and an agy binary is there, a round whose servers give no
+    /// windows runs agy's own usage report, whose outcome is the round's (QUOTAS 9.4): a refusal of the servers then stops
+    /// nothing. Without a binary the route is what it was without the report.
     /// </summary>
     private FetchPlan? AntigravityPlan(QuotaVendorRound round, RouteState state, int generation)
     {
@@ -201,7 +202,8 @@ public sealed partial class QuotaVendorService
             return null;
         }
 
-        if (!round.DashboardOpen && !round.Running.Contains(SourceKind.Antigravity))
+        var open = round.AsksAsOpen(QuotaRoute.Antigravity);
+        if (!open && !round.Running.Contains(SourceKind.Antigravity))
         {
             _antigravityRuns = false;
             state.Status = QuotaRouteStatus.Of(QuotaStatusKind.NotRunning);
@@ -218,7 +220,7 @@ public sealed partial class QuotaVendorService
         var agyRuns = locator.AgyRuns;
         _antigravityRuns = servers.Count > 0 || agyRuns;
         _forgottenTokens.IntersectWith(servers.Select(s => s.Pid));
-        var report = (round.DashboardOpen || agyRuns) && _environment.AntigravityReport is { } cli && cli.CanRun() ? cli : null;
+        var report = (open || agyRuns) && _environment.AntigravityReport is { } cli && cli.CanRun() ? cli : null;
         if (servers.Count == 0 && report is null)
         {
             state.Status = QuotaRouteStatus.Of(QuotaStatusKind.NotRunning);

@@ -3690,9 +3690,10 @@ changes width with the values.
     The Windows tooltip's first line does not repeat them: its own quota lines carry them.
   - **Updates**: whenever the quota state changes (a new snapshot, an estimate, a status, a switch) and each minute
     (resets and ages move on, QUOTAS 7); characters are replaced in their cells, no animation.
-  - **Polling**: while the block is on (a source chosen, the display mode not glyph only), the light process listing
-    runs as for the 額度 card (QUOTAS 6), and the chosen source's vendor route asks on its cadence as if the dashboard
-    were open (QUOTAS 9.1), so the bar stays current with the dashboard and the orbs closed.
+  - **Polling**: while the block is on (a source chosen, the display mode not glyph only; on Windows also
+    `settings.bar.show` on, as for the network block's sampling), the light process listing runs as for the 額度 card
+    (QUOTAS 6), and the chosen source's vendor route asks on its cadence as if the dashboard were open (QUOTAS 9.1), so
+    the bar stays current with the dashboard and the orbs closed.
 - **Settings**:
   - **Network control.** `settings.bar.traffic` appears in 選單列 / 工作列 (section 5) and in 網路流量 (*Settings →
     網路流量*, below). In 選單列 / 工作列 it is always enabled. While `settings.traffic.enabled` is off, the two
