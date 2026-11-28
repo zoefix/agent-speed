@@ -39,13 +39,13 @@ struct SessionTests {
         let session = TranscriptSession(configuration: configuration)
         let fixtureDay = Clock.milliseconds(Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_792_490_400)))
         let summary = session.seed(todayStartMs: fixtureDay)
-        #expect(summary.filesRead == 16)
-        #expect(summary.filesDiscovered == 16)
+        #expect(summary.filesRead == 18)
+        #expect(summary.filesDiscovered == 18)
         #expect(Set(session.responses.map(\.key)) == [
             "resp-1", "resp-2", "resp-3", "resp-4", "codex-legacy:thread-legacy:20213", "codex-legacy:thread-legacy:41000",
             "resp-z1", "resp-z2", "resp-p1", "resp-p2", "resp-t1", "resp-t2", "resp-t3", "resp-t4",
             "msg_A", "msg_B", "msg_C", "msg_D", "msg_E", "msg_W", "msg_R1", "msg_R2", "msg_R3", "msg_F1",
-            "dsm-1", "dsm-2", "dss-1",
+            "msg_P", "msg_N", "dsm-1", "dsm-2", "dss-1",
         ])
         #expect(session.responses.first { $0.key == "msg_B" }?.agentId.hasSuffix("s-cli.jsonl") == true)
         #expect(session.responses.first { $0.key == "dsm-1" }?.agentId.hasSuffix("session-dsh-main/session.v4.jsonl.zstd") == true)
@@ -83,7 +83,7 @@ struct SessionTests {
             // Only the parent's other sub-agents (the paginated Codex one) may come between them.
             #expect(agents[(parent + 1)...child].allSatisfy { $0.parentId == agents[parent].id })
         }
-        #expect(agents.count == 16)
+        #expect(agents.count == 18)
         #expect(agents.filter { $0.parentId != nil }.count == 5)
         _ = directory
     }
