@@ -228,9 +228,9 @@ public class CharacterLiveInputsTests(ITestOutputHelper output)
 
         var director = draw.Stage!.Current.Director;
         Assert.Equal(CharacterMood.Work, director.Mood);
-        live.Scripted = true;
-        live.ScriptedCursor = (0, 0.3);
-        live.ScriptedClick();
+        var at = draw.FigureClickFraction();
+        Assert.NotNull(at);
+        live.Click(at.Value);
         orb.Render(time);
         Assert.Equal(CharacterMood.Poke, director.Mood);
         Assert.Contains("mood=poke", draw.BehaviorTrace, StringComparison.Ordinal);

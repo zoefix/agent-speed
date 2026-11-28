@@ -78,6 +78,37 @@ public sealed partial class CharacterDraw
         return inputs;
     }
 
+    /// <summary>
+    /// The middle of the widest band of her outline as last traced, as the window fraction a click there reports (tests
+    /// click her where she is: she hops and sways, so a fixed point misses her on some frames).
+    /// </summary>
+    internal (double X, double Y)? FigureClickFraction()
+    {
+        if (_silhouette is not { } s || _ctx is not { } ctx || !(ctx.Canvas > 0))
+        {
+            return null;
+        }
+
+        (double X, double Y, double Width)? best = null;
+        for (var i = 0; i < s.BandCount; i++)
+        {
+            var y = s.Top + (i + 0.5) * s.Step;
+            if (s.Extent(y, y) is { } e && (best is not { } b || e.Right - e.Left > b.Width))
+            {
+                best = ((e.Left + e.Right) / 2, y, e.Right - e.Left);
+            }
+        }
+
+        if (best is not { } p)
+        {
+            return null;
+        }
+
+        var c = ctx.Canvas / 2;
+        var k = Math.Max(ContentScale, 0.01);
+        return ((c + (p.X - c) * k) / ctx.Canvas, (c + (p.Y - c) * k) / ctx.Canvas);
+    }
+
     /// <summary>The pointer relative to her face in her heights (screen axes, y down); null beyond her look range.</summary>
     public static (double X, double Y)? Cursor((double X, double Y) point, (double X, double Y) face, double height)
     {
