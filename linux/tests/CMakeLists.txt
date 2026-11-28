@@ -19,6 +19,7 @@ add_executable(agentspeed_tests
     character_stretch_test.cpp
     character_wings_test.cpp
     claude_api_error_test.cpp
+    claude_replay_test.cpp
     codebuddy_test.cpp
     current_values_test.cpp
     devin_fixture_test.cpp
