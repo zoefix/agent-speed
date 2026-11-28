@@ -23,11 +23,18 @@ struct StatusItemPalette: Equatable {
 
     /// Heat color for the fill, darkened on light bars until it keeps 3:1 (4.5:1 with Increase Contrast).
     func heat(_ h: Double) -> RGBColor {
-        var color = HeatPalette.color(h, dark: isDark)
-        guard !isDark else { return color }
-        let target = increasedContrast ? 4.5 : 3
+        Self.legible(HeatPalette.color(h, dark: isDark), dark: isDark, target: increasedContrast ? 4.5 : 3)
+    }
+
+    /// An exhausted quota window's number (DESIGN 10): the system red, darkened on light bars until the 9 pt text keeps
+    /// 4.5:1.
+    var critical: RGBColor { Self.legible(QuotaLevel.red(dark: isDark), dark: isDark, target: 4.5) }
+
+    private static func legible(_ color: RGBColor, dark: Bool, target: Double) -> RGBColor {
+        guard !dark else { return color }
+        var color = color
         var steps = 0
-        while color.contrast(with: Self.lightBar) < target, steps < 16 {
+        while color.contrast(with: lightBar) < target, steps < 16 {
             color = color.darkened(0.05)
             steps += 1
         }

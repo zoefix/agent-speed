@@ -49,6 +49,11 @@ final class AppSettings {
     var barIntelligence: Bool { didSet { store(barIntelligence, .barIntelligence) } }
     /// The menu bar money block (DESIGN 3): the live money rate and today's total after a tok/s value.
     var barSecondary: Bool { didSet { store(barSecondary, .barSecondary) } }
+    /// The menu bar quota block (DESIGN 10): one quota source's first two windows after the intelligence block; nil
+    /// (`off`) by default.
+    var barQuota: SourceKind? { didSet { store(barQuota?.rawValue ?? Self.barQuotaOff, .barQuota) } }
+    /// The quota block's percents: used (default, as the dashboard shows them) or remaining.
+    var barQuotaPercent: BarQuotaPercent { didSet { store(barQuotaPercent.rawValue, .barQuotaPercent) } }
 
     /// Dashboard agents list: every agent instead of the first rows (DESIGN section 4.4).
     var agentsExpanded: Bool { didSet { store(agentsExpanded, .agentsExpanded) } }
@@ -171,6 +176,8 @@ final class AppSettings {
             defaults.set(true, forKey: Key.barIntelligence.rawValue)
         }
         barSecondary = defaults.object(forKey: Key.barSecondary.rawValue) as? Bool ?? false
+        barQuota = Self.barQuotaSource(defaults.string(forKey: Key.barQuota.rawValue))
+        barQuotaPercent = BarQuotaPercent(rawValue: defaults.string(forKey: Key.barQuotaPercent.rawValue) ?? "") ?? .used
         agentsExpanded = defaults.object(forKey: Key.agentsExpanded.rawValue) as? Bool ?? false
         effects = EffectsLevel(rawValue: defaults.string(forKey: Key.effects.rawValue) ?? "") ?? .standard
         celebratePeaks = defaults.object(forKey: Key.celebratePeaks.rawValue) as? Bool ?? true
@@ -332,6 +339,13 @@ final class AppSettings {
     /// The stored `barTraffic` value of builds before 性能 had its own switch (DESIGN 10).
     static let retiredIntelligenceTraffic = "intelligence"
 
+    static let barQuotaOff = "off"
+
+    /// A stored `barQuota`: a quota source by its key; `off`, an unknown value or a source without a quota reads as off.
+    static func barQuotaSource(_ stored: String?) -> SourceKind? {
+        stored.flatMap(SourceKind.init(rawValue:)).flatMap { QuotaController.sources.contains($0) ? $0 : nil }
+    }
+
     private func store(_ value: Any?, _ key: Key) {
         if let value { defaults.set(value, forKey: key.rawValue) } else { defaults.removeObject(forKey: key.rawValue) }
     }
@@ -341,6 +355,7 @@ final class AppSettings {
         case barMode, barColoredGlyph, barShowsUnit
         case orbVisible, orbsVisible, orbNames
         case trafficEnabled, trafficIncludeTools, trafficUnit, barTraffic, barIntelligence, barSecondary
+        case barQuota, barQuotaPercent
         case agentsExpanded
         case effects, celebratePeaks, responsePulses, displaySync
         case enabledSources, knownSources

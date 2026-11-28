@@ -48,6 +48,9 @@ enum PreviewRenderer {
         if wants("intelbar") {
             IntelligenceBarPreviews.render(model: model, into: directory)
         }
+        if wants("quotabar") {
+            QuotaBarPreviews.render(model: model, into: directory)
+        }
         if wants("cards") {
             TitleCardPreviews.render(model: model, into: directory)
         }

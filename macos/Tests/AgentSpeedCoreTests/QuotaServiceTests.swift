@@ -8,10 +8,11 @@ struct QuotaServiceTests {
     static let minute: Int64 = 60_000
 
     static func round(_ routes: Set<QuotaRoute>, at now: Int64 = QuotaServiceTests.now, network: Bool = true,
-                      running: Set<SourceKind> = [], dashboard: Bool = false, region: QuotaRequests.ZaiRegion = .global)
+                      running: Set<SourceKind> = [], dashboard: Bool = false, region: QuotaRequests.ZaiRegion = .global,
+                      shown: Set<SourceKind> = [])
         -> QuotaVendorRound {
         QuotaVendorRound(nowMs: now, networkEnabled: network, routes: routes, running: running, dashboardOpen: dashboard,
-                         zaiRegion: region)
+                         zaiRegion: region, shown: shown)
     }
 
     static let kimiBody = #"{"usages":{"limit_5h":{"used_ratio":0.25,"reset_time":"2026-11-10T22:00:00Z"},"limit_7d":{"used_ratio":0.5}}}"#
@@ -61,6 +62,35 @@ struct QuotaServiceTests {
         // Off forgets everything.
         readings = await service.refresh(Self.round([], dashboard: true))
         #expect(readings.routes[.kimi] == nil)
+    }
+
+    /// QUOTAS 9.1, DESIGN 10: the menu bar's quota block asks for its one source on the cadence, as an open dashboard
+    /// does, while the agent is not running; the other routes keep waiting for their agent.
+    @Test func theMenuBarsSourceAsksWhileItsAgentDoesNotRun() async throws {
+        let home = try Self.kimiHome()
+        let transport = ScriptedQuotaTransport()
+        transport.script(Self.kimiURL, .status(200, Self.kimiBody))
+        let service = QuotaVendorService(environment: .test(home: home.url, transport: transport))
+        var readings = await service.refresh(Self.round([.kimi], shown: [.gemini]))
+        #expect(readings.routes[.kimi]?.status == .notRunning, "another source on the bar asks nothing for Kimi")
+        #expect(transport.requests.isEmpty)
+        readings = await service.refresh(Self.round([.kimi], shown: [.kimi]))
+        #expect(transport.requests.count == 1)
+        #expect(readings.routes[.kimi]?.status == .ok(Self.now))
+        _ = await service.refresh(Self.round([.kimi], at: Self.now + 4 * Self.minute, shown: [.kimi]))
+        #expect(transport.requests.count == 1, "still at most every 5 minutes")
+        _ = await service.refresh(Self.round([.kimi], at: Self.now + 5 * Self.minute, shown: [.kimi]))
+        #expect(transport.requests.count == 2)
+        _ = await service.refresh(Self.round([.kimi], at: Self.now + 10 * Self.minute, network: false, shown: [.kimi]))
+        #expect(transport.requests.count == 2, "the network switch still wins")
+    }
+
+    @Test func aRoundShowsASourceOnTheBarOrEverySourceWithTheDashboardOpen() {
+        let bar = Self.round([.qoder], shown: [.qoderCli])
+        #expect(bar.shows(QuotaRoute.qoder.agents), "Qoder's one route serves both Qoder sources")
+        #expect(!bar.shows(QuotaRoute.kimi.agents))
+        #expect(Self.round([.kimi], dashboard: true).shows(QuotaRoute.kimi.agents))
+        #expect(!Self.round([.kimi]).shows(QuotaRoute.kimi.agents))
     }
 
     @Test func aRefusalStopsUntilTheSignInChangesAndAnotherAccountDropsTheNumbers() async throws {

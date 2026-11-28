@@ -63,6 +63,11 @@ final class QuotaController {
 
     /// An orb shows (or could show) the 額度 card: the light process listing runs while traffic keeps no table.
     @ObservationIgnored var wantsCard = false
+    /// The menu bar's quota block shows this source (DESIGN 10): the listing runs and its route asks as if the
+    /// dashboard were open (QUOTAS 6, 9.1).
+    var barSource: SourceKind? {
+        settings.barMode == .glyph ? nil : settings.barQuota
+    }
     /// The dashboard is open: vendor requests may run while no agent does (QUOTAS 9.1).
     @ObservationIgnored var dashboardOpen = false {
         didSet { if dashboardOpen, !oldValue, isLive { tick(force: true) } }
@@ -184,6 +189,7 @@ final class QuotaController {
             _ = (self.settings.quotaClaudeDesktop, self.settings.quotaClaudeCli, self.settings.quotaCodex)
             _ = self.settings.enabledSources
             _ = (self.settings.quotaRoutes, self.settings.quotaZcodeRegion, self.settings.networkEnabled)
+            _ = self.barSource
             DispatchQueue.main.async { [weak self] in
                 self?.readsLocalNext = true
                 self?.tick(force: true)
@@ -246,7 +252,7 @@ final class QuotaController {
             bridgeStatus: settings.quotaClaudeCli && everyMinute,
             codexSignIn: every15s && settings.showsQuota(.codex),
             claudeSignIn: every15s && settings.showsQuota(.claudeCode),
-            scanProcesses: every15s && tableApps == nil && (wantsCard || !settings.quotaRoutes.isEmpty)
+            scanProcesses: every15s && tableApps == nil && (wantsCard || barSource != nil || !settings.quotaRoutes.isEmpty)
         )
         roundInFlight = true
         worker.run(request) { result in

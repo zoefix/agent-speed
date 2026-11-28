@@ -14,7 +14,8 @@ extension QuotaController {
         guard !routes.isEmpty || !vendor.routes.isEmpty else { return }
         let round = QuotaVendorRound(nowMs: nowMs, networkEnabled: settings.networkEnabled, routes: routes,
                                      running: apps.running, dashboardOpen: dashboardOpen,
-                                     zaiRegion: settings.quotaZcodeRegion, readsLocalNow: readsLocalNext)
+                                     zaiRegion: settings.quotaZcodeRegion, readsLocalNow: readsLocalNext,
+                                     shown: barSource.map { [$0] } ?? [])
         readsLocalNext = false
         vendorInFlight = true
         let service = vendorService

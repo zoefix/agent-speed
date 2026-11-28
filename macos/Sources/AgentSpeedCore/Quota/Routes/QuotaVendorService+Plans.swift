@@ -131,15 +131,16 @@ extension QuotaVendorService {
 
     // MARK: Antigravity (QUOTAS 9.4)
 
-    /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open), the
-    /// network is on and the last request is old enough. agy's usage report backs them while a user's agy runs or
-    /// the dashboard is open and an agy binary exists; such a round is not stopped by a server's refusal.
+    /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open, or the
+    /// menu bar shows Antigravity), the network is on and the last request is old enough. agy's usage report backs
+    /// them while a user's agy runs or the source is shown that way and an agy binary exists; such a round is not
+    /// stopped by a server's refusal.
     private func antigravityPlan(_ round: QuotaVendorRound, _ state: inout RouteState) -> FetchPlan? {
         guard round.networkEnabled else {
             state.reading.status = .networkOff
             return nil
         }
-        guard round.dashboardOpen || round.running.contains(.antigravity) else {
+        guard round.shows([.antigravity]) || round.running.contains(.antigravity) else {
             antigravityRuns = false
             state.reading.status = .notRunning
             return nil
@@ -152,7 +153,7 @@ extension QuotaVendorService {
         var servers = scan.servers
         antigravityRuns = !servers.isEmpty || scan.agyRuns
         forgottenTokens.formIntersection(servers.map(\.pid))
-        let reportable = scan.agyRuns || round.dashboardOpen
+        let reportable = scan.agyRuns || round.shows([.antigravity])
         let report = reportable && environment.antigravityReport.available() ? environment.antigravityReport : nil
         guard !servers.isEmpty || report != nil else {
             state.reading.status = .notRunning

@@ -12,6 +12,8 @@ final class StatusItemRenderer {
     private var widthGovernor = StatusItemWidthGovernor()
     private var secondaryGovernor = StatusItemWidthGovernor()
     private var intelligenceGovernor = StatusItemWidthGovernor()
+    private var quotaLabelGovernor = StatusItemWidthGovernor()
+    private var quotaNumberGovernor = StatusItemWidthGovernor()
     private var shrinkTimer: Timer?
     private var scheduledShrink: TimeInterval?
     private var loop: ObservationLoop?
@@ -45,6 +47,8 @@ final class StatusItemRenderer {
             if settings.barIntelligence {
                 _ = (self.model.snapshot.intelligence, self.model.snapshot.agents, self.model.barThinking.hidden)
             }
+            // The quota block follows its source's snapshot, estimate, status and switches, and the minute (DESIGN 10).
+            _ = (settings.barQuota, settings.barQuotaPercent, StatusItemQuota(model: self.model))
             self.render()
         }
     }
@@ -92,12 +96,17 @@ final class StatusItemRenderer {
         _ = widthGovernor.update(needed: needed, now: time)
         _ = secondaryGovernor.update(needed: StatusItemSecondary(model: model)?.numberWidth ?? 0, now: time)
         _ = intelligenceGovernor.update(needed: StatusItemIntelligence(model: model)?.cell ?? 0, now: time)
+        let quota = StatusItemQuota(model: model)
+        _ = quotaLabelGovernor.update(needed: quota?.labelWidth ?? 0, now: time)
+        _ = quotaNumberGovernor.update(needed: quota?.numberWidth ?? 0, now: time)
         return StatusItemState(model: model, time: time, valueWidth: widthGovernor.width,
-                               secondaryWidth: secondaryGovernor.width, intelligenceWidth: intelligenceGovernor.width)
+                               secondaryWidth: secondaryGovernor.width, intelligenceWidth: intelligenceGovernor.width,
+                               quotaCells: (quotaLabelGovernor.width, quotaNumberGovernor.width))
     }
 
     private func scheduleShrink() {
-        let deadline = [widthGovernor.shrinkDeadline, secondaryGovernor.shrinkDeadline, intelligenceGovernor.shrinkDeadline]
+        let deadline = [widthGovernor.shrinkDeadline, secondaryGovernor.shrinkDeadline, intelligenceGovernor.shrinkDeadline,
+                        quotaLabelGovernor.shrinkDeadline, quotaNumberGovernor.shrinkDeadline]
             .compactMap { $0 }.min()
         guard deadline != scheduledShrink else { return }
         scheduledShrink = deadline

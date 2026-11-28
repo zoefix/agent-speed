@@ -11,17 +11,18 @@ struct StatusItemState: Equatable {
     var increasedContrast: Bool
     /// The money block (DESIGN 3), when shown.
     var secondary: StatusItemSecondary?
-    /// The readout blocks (DESIGN 10), each when shown: the network speed, then the intelligence block.
+    /// The readout blocks (DESIGN 10), each when shown: the network speed, the intelligence block, the quota block.
     var traffic: StatusItemTraffic?
     var intelligence: StatusItemIntelligence?
+    var quota: StatusItemQuota?
 
     static let glowFade: TimeInterval = 0.35
 
-    /// `valueWidth`, `secondaryWidth` and `intelligenceWidth` are the rooms the governors reserve for the value and
-    /// the blocks' numbers (nil: exactly the current text).
+    /// `valueWidth`, `secondaryWidth`, `intelligenceWidth` and `quotaCells` are the rooms the governors reserve for the
+    /// value, the blocks' numbers and the quota block's labels and percents (nil: exactly the current text).
     @MainActor
     init(model: AppModel, time: TimeInterval, valueWidth: CGFloat? = nil, secondaryWidth: CGFloat? = nil,
-         intelligenceWidth: CGFloat? = nil) {
+         intelligenceWidth: CGFloat? = nil, quotaCells: (label: CGFloat, number: CGFloat)? = nil) {
         let gauge = model.gauge
         let (text, unit) = StatusItemValue.current(model)
         layout = StatusItemLayout(model: model, unit: unit, valueWidth: valueWidth ?? StatusItemLayout.valueWidth(of: text))
@@ -36,8 +37,14 @@ struct StatusItemState: Equatable {
         traffic = StatusItemTraffic(model: model)
         intelligence = StatusItemIntelligence(model: model)
         if let intelligenceWidth, let cell = intelligence?.cell { intelligence?.cell = max(intelligenceWidth, cell) }
+        quota = StatusItemQuota(model: model)
+        if let quotaCells, let label = quota?.labelCell, let number = quota?.numberCell {
+            quota?.labelCell = max(quotaCells.label, label)
+            quota?.numberCell = max(quotaCells.number, number)
+        }
         layout.trafficWidth = traffic?.width ?? 0
         layout.intelligenceWidth = intelligence?.width ?? 0
+        layout.quotaWidth = quota?.width ?? 0
     }
 
     /// Whether the redline flicker may run (DESIGN section 3; off with Reduce Motion or effects off).

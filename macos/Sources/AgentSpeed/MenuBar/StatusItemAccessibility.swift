@@ -26,6 +26,8 @@ final class StatusItemAccessibility {
             if self.model.settings.barIntelligence {
                 _ = (self.model.snapshot.intelligence, self.model.snapshot.agents, self.model.barThinking.hidden)
             }
+            // The quota block's words follow its source's quota and the minute (DESIGN 10).
+            _ = (self.model.settings.barQuota, StatusItemQuota(model: self.model))
             self.schedule()
         }
     }
@@ -75,23 +77,28 @@ final class StatusItemAccessibility {
         let snapshot = model.snapshot
         let topAgent = intelligence == nil ? nil
             : StatusItemIntelligence.topAgent(snapshot.intelligence.score, agents: snapshot.agents, l10n: l10n)
+        // The quota block reads every window of its source; the tooltip lists them on lines of their own (DESIGN 10).
+        let quota = StatusItemQuota(model: model)
         func tooltip(_ text: String) -> String {
-            [text, topAgent].compactMap { $0 }.joined(separator: "\n")
+            ([text, topAgent].compactMap { $0 } + (quota?.tooltip ?? [])).joined(separator: "\n")
         }
         let separator = l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，"
         let secondary = StatusItemSecondary(model: model)?.spoken
         func withTraffic(_ text: String) -> String {
             [text, secondary, traffic, intelligence?.spoken].compactMap { $0 }.joined(separator: separator)
         }
+        func spoken(_ text: String) -> String {
+            [withTraffic(text), quota?.spoken].compactMap { $0 }.joined(separator: separator)
+        }
         if let money = StatusItemValue.money(model) {
             // The money unit reads the amount with the currency's name (DESIGN 9, Accessibility).
             let amount = money.atLeast ? l10n("a11y.orb.costAtLeast", money.number) : money.number
             let text = money.unknown ? l10n("a11y.orb.costUnknown", title) : l10n("a11y.orb.cost", amount, model.cost.currencyName, title)
-            button.setAccessibilityValue(withTraffic(text))
+            button.setAccessibilityValue(spoken(text))
             button.toolTip = tooltip(withTraffic(text))
             return
         }
-        button.setAccessibilityValue(withTraffic(l10n("a11y.orb", speed, title)))
+        button.setAccessibilityValue(spoken(l10n("a11y.orb", speed, title)))
         button.toolTip = tooltip(withTraffic(l10n("mac.a11y.statusItem", speed, title)))
     }
 

@@ -66,6 +66,15 @@ enum BarTraffic: String, CaseIterable, Identifiable, Sendable {
     var isNetwork: Bool { self == .machine || self == .agents }
 }
 
+/// The percents of the menu bar's quota block (DESIGN 10): used (default, as the dashboard and QUOTAS 7) or remaining,
+/// `100 −` the shown integer.
+enum BarQuotaPercent: String, CaseIterable, Identifiable, Sendable {
+    case used, remaining
+
+    var id: String { rawValue }
+    var titleKey: String { "settings.bar.quota.percent.\(rawValue)" }
+}
+
 /// The live value's unit (DESIGN 9): token speed or the API-equivalent cost per second.
 enum LiveUnit: String, CaseIterable, Identifiable, Sendable {
     case tokens, cost
